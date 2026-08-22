@@ -6,9 +6,9 @@
 # PCIe 100MHz Reference Clock (Bank 216 MGTREFCLK0: F10/E10)
 # Matches ALINX AX7A200B Manual: PCIE_CLK_P -> F10, PCIE_CLK_N -> E10
 # -------------------------------------------------------------------------
-set_property PACKAGE_PIN F10 [get_ports {sys_clk_p[0]}]
-set_property PACKAGE_PIN E10 [get_ports {sys_clk_n[0]}]
-create_clock -period 10.000 -name sys_clk [get_ports {sys_clk_p[0]}]
+set_property PACKAGE_PIN F10 [get_ports sys_clk_p]
+set_property PACKAGE_PIN E10 [get_ports sys_clk_n]
+create_clock -period 10.000 -name sys_clk [get_ports sys_clk_p]
 
 # -------------------------------------------------------------------------
 # PCIe System Reset (PCIE_PERST from PCIe Edge Connector)
