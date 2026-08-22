@@ -15,7 +15,12 @@
 	)
 	(
 		// Users to add ports here
-
+		output wire        doorbell_pulse,
+		output wire [63:0] reg_ring_dma_addr,
+		output wire [63:0] reg_desc_dma_addr,
+		output wire [31:0] reg_opcode,
+		input  wire        task_done_irq,
+		output wire        irq_ack_pulse,
 		// User ports ends
 		// Do not modify the ports beyond this line
 
@@ -223,7 +228,7 @@
 	      slv_reg4 <= 0;
 	      slv_reg5 <= 0;
 	      slv_reg6 <= 0;
-	      slv_reg7 <= 0;
+	      slv_reg7 <= 32'd1; // Default Opcode = Vector Add
 	      slv_reg8 <= 0;
 	      slv_reg9 <= 0;
 	      slv_reg10 <= 0;
@@ -422,7 +427,47 @@
 	// Implement memory mapped register select and read logic generation
 	  assign S_AXI_RDATA = (axi_araddr[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB] == 4'h0) ? slv_reg0 : (axi_araddr[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB] == 4'h1) ? slv_reg1 : (axi_araddr[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB] == 4'h2) ? slv_reg2 : (axi_araddr[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB] == 4'h3) ? slv_reg3 : (axi_araddr[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB] == 4'h4) ? slv_reg4 : (axi_araddr[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB] == 4'h5) ? slv_reg5 : (axi_araddr[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB] == 4'h6) ? slv_reg6 : (axi_araddr[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB] == 4'h7) ? slv_reg7 : (axi_araddr[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB] == 4'h8) ? slv_reg8 : (axi_araddr[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB] == 4'h9) ? slv_reg9 : (axi_araddr[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB] == 4'hA) ? slv_reg10 : (axi_araddr[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB] == 4'hB) ? slv_reg11 : (axi_araddr[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB] == 4'hC) ? slv_reg12 : (axi_araddr[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB] == 4'hD) ? slv_reg13 : (axi_araddr[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB] == 4'hE) ? slv_reg14 : (axi_araddr[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB] == 4'hF) ? slv_reg15 : 0; 
 	// Add user logic here
+	reg doorbell_pulse_reg;
+	reg irq_ack_pulse_reg;
 
+	wire slv_reg_wren = S_AXI_WVALID && S_AXI_WREADY;
+	wire [OPT_MEM_ADDR_BITS:0] wr_addr = (S_AXI_AWVALID) ? S_AXI_AWADDR[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB] : axi_awaddr[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB];
+
+	// Doorbell Pulse, Interrupt Latch (slv_reg1), and IRQ ACK Pulse Logic
+	always @(posedge S_AXI_ACLK) begin
+		if (!S_AXI_ARESETN) begin
+			doorbell_pulse_reg <= 1'b0;
+			irq_ack_pulse_reg  <= 1'b0;
+		end else begin
+			doorbell_pulse_reg <= 1'b0;
+			irq_ack_pulse_reg  <= 1'b0;
+
+			// Latch interrupt bit into slv_reg1[0] when GPU compute core finishes task
+			if (task_done_irq) begin
+				slv_reg1[0] <= 1'b1;
+			end
+
+			// Handle write events
+			if (slv_reg_wren) begin
+				if (wr_addr == 4'h0 && S_AXI_WDATA != 0) begin
+					// Doorbell (0x00): generate 1-cycle start pulse
+					doorbell_pulse_reg <= 1'b1;
+				end
+				if (wr_addr == 4'h2) begin
+					// INT_ACK (0x08): clear interrupt status slv_reg1[0] and generate 1-cycle ACK pulse
+					slv_reg1[0]        <= 1'b0;
+					irq_ack_pulse_reg  <= 1'b1;
+				end
+			end
+		end
+	end
+
+	// Combinational User Output Assignments
+	assign doorbell_pulse    = doorbell_pulse_reg;
+	assign reg_ring_dma_addr = {slv_reg4, slv_reg3};
+	assign reg_desc_dma_addr = {slv_reg6, slv_reg5};
+	assign reg_opcode        = slv_reg7;
+	assign irq_ack_pulse     = irq_ack_pulse_reg;
 	// User logic ends
 
 	endmodule
