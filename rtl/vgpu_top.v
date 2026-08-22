@@ -206,9 +206,9 @@ module vgpu_top (
     (* X_INTERFACE_INFO = "xilinx.com:interface:aximm:1.0 m_axi_dma WREADY" *)
     input  wire        m_axi_dma_wready,
     (* X_INTERFACE_INFO = "xilinx.com:interface:aximm:1.0 m_axi_dma BRESP" *)
-    output wire [1:0]  m_axi_dma_bresp,
+    input  wire [1:0]  m_axi_dma_bresp,
     (* X_INTERFACE_INFO = "xilinx.com:interface:aximm:1.0 m_axi_dma BVALID" *)
-    output wire        m_axi_dma_bvalid,
+    input  wire        m_axi_dma_bvalid,
     (* X_INTERFACE_INFO = "xilinx.com:interface:aximm:1.0 m_axi_dma BREADY" *)
     output wire        m_axi_dma_bready,
 
