@@ -77,8 +77,8 @@
         "m_axi_dma_wlast": [ { "direction": "out" } ],
         "m_axi_dma_wvalid": [ { "direction": "out" } ],
         "m_axi_dma_wready": [ { "direction": "in", "driver_value": "0" } ],
-        "m_axi_dma_bresp": [ { "direction": "out", "size_left": "1", "size_right": "0" } ],
-        "m_axi_dma_bvalid": [ { "direction": "out" } ],
+        "m_axi_dma_bresp": [ { "direction": "in", "size_left": "1", "size_right": "0", "driver_value": "0" } ],
+        "m_axi_dma_bvalid": [ { "direction": "in", "driver_value": "0" } ],
         "m_axi_dma_bready": [ { "direction": "out" } ],
         "usr_irq_req": [ { "direction": "out" } ],
         "usr_irq_ack": [ { "direction": "in" } ]
@@ -261,5 +261,5 @@
       }
     }
   },
-  "checksum": "52ebb7ba"
+  "checksum": "43e79e1f"
 }
