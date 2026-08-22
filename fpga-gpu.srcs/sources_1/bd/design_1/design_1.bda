@@ -193,42 +193,6 @@
                 "VH": "2",
                 "VT": "PM",
                 "TU": "active"
-            },
-            "V3": {
-                "VT": "AC",
-                "BA": "0x00000000",
-                "HA": "0x00000FFF",
-                "BP": "C_BASEADDR",
-                "HP": "C_HIGHADDR",
-                "MA": "M_AXI",
-                "MX": "/axi_pcie_0",
-                "MI": "M_AXI",
-                "MS": "SEG_vgpu_top_0_reg0",
-                "MV": "xilinx.com:ip:axi_pcie:2.9",
-                "SX": "/vgpu_top_0",
-                "SI": "s_axi_ctrl",
-                "SS": "reg0",
-                "SV": "xilinx.com:module_ref:vgpu_top:1.0",
-                "TM": "both",
-                "TU": "register"
-            },
-            "V4": {
-                "VT": "AC",
-                "BA": "0x0000000000000000",
-                "HA": "0x00000000FFFFFFFF",
-                "BP": "AXIBAR_0",
-                "HP": "AXIBAR_HIGHADDR_0",
-                "MA": "m_axi_dma",
-                "MX": "/vgpu_top_0",
-                "MI": "m_axi_dma",
-                "MS": "SEG_axi_pcie_0_BAR0",
-                "MV": "xilinx.com:module_ref:vgpu_top:1.0",
-                "SX": "/axi_pcie_0",
-                "SI": "S_AXI",
-                "SS": "BAR0",
-                "SV": "xilinx.com:ip:axi_pcie:2.9",
-                "TM": "both",
-                "TU": "memory"
             }
         },
         "edges": [
@@ -239,16 +203,6 @@
             {
                 "src": "V1",
                 "trg": "V2"
-            },
-            {
-                "src": "V3",
-                "trg": "V2",
-                "EH": "2"
-            },
-            {
-                "src": "V4",
-                "trg": "V2",
-                "EH": "2"
             }
         ]
     }

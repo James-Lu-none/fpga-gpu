@@ -55,18 +55,22 @@ fpga-gpu/
 ---
 
 ### 步驟 3：連線與 Address Editor 設定
-1. **訊號連線**：
-   - `xdma_0/M_AXI_LITE` ──> `vgpu_top/s_axi_ctrl`
-   - `vgpu_top/m_axi_dma` ──> `xdma_0/S_AXI_B` (或透過 AXI SmartConnect 接至 S_AXI)
-   - `vgpu_top/usr_irq_req` ──> `xdma_0/usr_irq_req[0]`
-   - `xdma_0/usr_irq_ack[0]` ──> `vgpu_top/usr_irq_ack`
-   - `xdma_0/axi_aclk` ──> 接至 `vgpu_top/axi_aclk` 及所有 AXI 匯流排時脈
-   - `xdma_0/axi_aresetn` ──> 接至 `vgpu_top/axi_aresetn` 及所有 AXI 重置
-2. **外部引腳 (External Ports)**：
+1. **XDMA IP 模式設定**：
+   - 在 XDMA IP 的 **Basic 頁籤**，將 Interface Interface 設為 **AXI Stream**（產生 `M_AXIS_H2C_0` 與 `S_AXIS_C2H_0`）。
+2. **訊號連線 (Block Design Wiring)**：
+   - **AXI-Lite MMIO 控制介面**：`xdma_0/M_AXI_LITE` ──> `vgpu_top/s_axi_ctrl`
+   - **AXI-Stream 下行資料串流 (H2C)**：`xdma_0/M_AXIS_H2C_0` ──> `vgpu_top/s_axis_dma`
+   - **AXI-Stream 上行資料串流 (C2H)**：`vgpu_top/m_axis_dma` ──> `xdma_0/S_AXIS_C2H_0`
+   - **MSI 中斷觸發訊號**：
+     - `vgpu_top/usr_irq_req` ──> `xdma_0/usr_irq_req[0]`
+     - `xdma_0/usr_irq_ack[0]` ──> `vgpu_top/usr_irq_ack`
+   - **時脈與重置 (Clock & Reset)**：
+     - `xdma_0/axi_aclk` ──> 接至 `vgpu_top/axi_aclk`
+     - `xdma_0/axi_aresetn` ──> 接至 `vgpu_top/axi_aresetn`
+3. **外部引腳 (External Ports)**：
    - 將 `xdma_0` 的 `sys_clk`、`sys_rst_n` 與 `pcie_mgt` 右鍵設為 **Make External**。
-3. **Address Editor**：
+4. **Address Editor**：
    - 確保 `s_axi_ctrl` 映射在 `0x4000_0000` (64KB)。
-   - 確保 `m_axi_dma` 映射至 Host 記憶體位址空間 (`0x0000_0000_0000_0000` ~ `0xFFFF_FFFF_FFFF_FFFF`)。
 
 ---
 
