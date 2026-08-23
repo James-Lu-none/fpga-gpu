@@ -8,8 +8,13 @@ originally, a custom pcie ip (`axi_pcie` + custom `vgpu_dma_master.v` + software
 
 ### clock and reset architecture
 
-- external pcie reference clock (`sys_clk_p` / `sys_clk_n`) and reset (`sys_rst_n`) feed directly into the XDMA IP (`xdma_0`).
-- all internal user modules (`vgpu_top`, `vgpu_regs_slave_lite_v1_0_S00_AXI`, `vgpu_compute_core`) use XDMA's generated clock `xdma_0/axi_aclk` and active-low reset `xdma_0/axi_aresetn`.
+- **PCIe Reference Clock Buffer (`IBUFDS_GTE2`)**: 
+  - The PCIe 100MHz reference clock uses Bank 216 GTP dedicated reference clock pins `F10` (`sys_clk_clk_p`) and `E10` (`sys_clk_clk_n`).
+  - In 7-Series FPGAs, MGTREFCLK pins cannot connect to standard single-ended `IBUF` primitives due to physical silicon routing constraints.
+  - A Utility Buffer IP (`util_ds_buf`) with `C_BUF_TYPE` set to `IBUFDSGTE` (`IBUFDS_GTE2`) is instantiated in Block Design (`design_1.bd`) to convert the differential clock input into `IBUF_OUT` for `xdma_0/sys_clk`.
+- **System Reset & Internal Clocking**:
+  - External PCIe reset `sys_rst_n` (`T18`) feeds directly into `xdma_0/sys_rst_n`.
+  - All internal user modules (`vgpu_top`, `vgpu_regs_slave_lite_v1_0_S00_AXI`, `vgpu_compute_core`) operate on XDMA's generated clock `xdma_0/axi_aclk` (125MHz) and active-low reset `xdma_0/axi_aresetn`.
 
 ### GPU AXI4 peripheral (register space) logic modifications
 

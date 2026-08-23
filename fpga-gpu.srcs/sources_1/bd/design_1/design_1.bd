@@ -1,7 +1,7 @@
 {
   "design": {
     "design_info": {
-      "boundary_crc": "0xDD8853CFF7FD98FF",
+      "boundary_crc": "0x333C1C507D521722",
       "device": "xc7a200tfbg484-2",
       "gen_directory": "../../../../fpga-gpu.gen/sources_1/bd/design_1",
       "name": "design_1",
@@ -12,7 +12,8 @@
     },
     "design_tree": {
       "xdma_0": "",
-      "vgpu_top_0": ""
+      "vgpu_top_0": "",
+      "util_ds_buf_0": ""
     },
     "interface_ports": {
       "pcie_mgt_0": {
@@ -69,6 +70,41 @@
             "right": "0"
           }
         }
+      },
+      "sys_clk": {
+        "mode": "Slave",
+        "vlnv_bus_definition": "xilinx.com:interface:diff_clock:1.0",
+        "vlnv": "xilinx.com:interface:diff_clock_rtl:1.0",
+        "parameters": {
+          "CAN_DEBUG": {
+            "value": "false",
+            "value_src": "default"
+          },
+          "FREQ_HZ": {
+            "value": "100000000",
+            "value_src": "default"
+          }
+        },
+        "hdl_attributes": {
+          "LOCKED": {
+            "value": "FALSE",
+            "value_src": "default"
+          }
+        },
+        "port_maps": {
+          "CLK_N": {
+            "physical_name": "sys_clk_clk_n",
+            "direction": "I",
+            "left": "0",
+            "right": "0"
+          },
+          "CLK_P": {
+            "physical_name": "sys_clk_clk_p",
+            "direction": "I",
+            "left": "0",
+            "right": "0"
+          }
+        }
       }
     },
     "ports": {
@@ -82,32 +118,6 @@
           },
           "POLARITY": {
             "value": "ACTIVE_LOW",
-            "value_src": "default"
-          }
-        }
-      },
-      "sys_clk": {
-        "type": "clk",
-        "direction": "I",
-        "parameters": {
-          "CLK_DOMAIN": {
-            "value": "design_1_sys_clk_0",
-            "value_src": "default"
-          },
-          "FREQ_HZ": {
-            "value": "100000000",
-            "value_src": "default"
-          },
-          "FREQ_TOLERANCE_HZ": {
-            "value": "0",
-            "value_src": "default"
-          },
-          "INSERT_VIP": {
-            "value": "0",
-            "value_src": "default"
-          },
-          "PHASE": {
-            "value": "0.0",
             "value_src": "default"
           }
         }
@@ -560,9 +570,28 @@
             "direction": "I"
           }
         }
+      },
+      "util_ds_buf_0": {
+        "vlnv": "xilinx.com:ip:util_ds_buf:2.2",
+        "ip_revision": "10",
+        "xci_name": "design_1_util_ds_buf_0_0",
+        "xci_path": "ip\\design_1_util_ds_buf_0_0\\design_1_util_ds_buf_0_0.xci",
+        "inst_hier_path": "util_ds_buf_0",
+        "has_run_ip_tcl": "true",
+        "parameters": {
+          "C_BUF_TYPE": {
+            "value": "IBUFDSGTE"
+          }
+        }
       }
     },
     "interface_nets": {
+      "CLK_IN_D_0_1": {
+        "interface_ports": [
+          "sys_clk",
+          "util_ds_buf_0/CLK_IN_D"
+        ]
+      },
       "vgpu_top_0_m_axis_dma": {
         "interface_ports": [
           "vgpu_top_0/m_axis_dma",
@@ -589,16 +618,16 @@
       }
     },
     "nets": {
-      "sys_clk_0_1": {
-        "ports": [
-          "sys_clk",
-          "xdma_0/sys_clk"
-        ]
-      },
       "sys_rst_n_0_1": {
         "ports": [
           "sys_rst_n",
           "xdma_0/sys_rst_n"
+        ]
+      },
+      "util_ds_buf_0_IBUF_OUT": {
+        "ports": [
+          "util_ds_buf_0/IBUF_OUT",
+          "xdma_0/sys_clk"
         ]
       },
       "vgpu_top_0_usr_irq_req": {

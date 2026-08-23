@@ -1,27 +1,29 @@
 {
    "ActiveEmotionalView":"Default View",
-   "Default View_ScaleFactor":"0.90566",
-   "Default View_TopLeft":"-110,-40",
+   "Default View_ScaleFactor":"1.08193",
+   "Default View_TopLeft":"-53,-9",
    "ExpandedHierarchyInLayout":"",
    "guistr":"# # String gsaved with Nlview 7.8.0 2024-04-26 e1825d835c VDI=44 GEI=38 GUI=JA:24.0
 #  -string -flagsOSRD
-preplace port pcie_mgt_0 -pg 1 -lvl 3 -x 720 -y 120 -defaultsOSRD
-preplace port port-id_sys_rst_n -pg 1 -lvl 0 -x 0 -y 260 -defaultsOSRD
-preplace port port-id_sys_clk -pg 1 -lvl 0 -x 0 -y 230 -defaultsOSRD
-preplace inst xdma_0 -pg 1 -lvl 2 -x 520 -y 160 -defaultsOSRD
-preplace inst vgpu_top_0 -pg 1 -lvl 1 -x 190 -y 130 -defaultsOSRD
-preplace netloc vgpu_top_0_usr_irq_req 1 1 1 350 140n
-preplace netloc xdma_0_usr_irq_ack 1 0 3 20 320 NJ 320 680
-preplace netloc xdma_0_axi_aclk 1 0 3 40 300 NJ 300 700
-preplace netloc sys_rst_n_0_1 1 0 2 NJ 260 360J
-preplace netloc sys_clk_0_1 1 0 2 NJ 230 340J
-preplace netloc xdma_0_axi_aresetn 1 0 3 30 310 NJ 310 690
-preplace netloc vgpu_top_0_m_axis_dma 1 1 1 N 120
-preplace netloc xdma_0_M_AXIS_H2C_0 1 0 3 40 20 NJ 20 700
-preplace netloc xdma_0_M_AXI_LITE 1 0 3 20 10 NJ 10 680
-preplace netloc xdma_0_pcie_mgt 1 2 1 N 120
-levelinfo -pg 1 0 190 520 720
-pagesize -pg 1 -db -bbox -sgen -110 0 850 330
+preplace port pcie_mgt_0 -pg 1 -lvl 3 -x 750 -y 140 -defaultsOSRD
+preplace port port-id_sys_rst_n -pg 1 -lvl 0 -x 0 -y 370 -defaultsOSRD
+preplace port sys_clk -pg 1 -lvl 0 -x 0 -y 300 -defaultsOSRD
+preplace inst xdma_0 -pg 1 -lvl 2 -x 540 -y 180 -defaultsOSRD
+preplace inst vgpu_top_0 -pg 1 -lvl 1 -x 190 -y 120 -defaultsOSRD
+preplace inst util_ds_buf_0 -pg 1 -lvl 1 -x 190 -y 300 -defaultsOSRD
+preplace netloc sys_rst_n_0_1 1 0 2 NJ 370 380J
+preplace netloc vgpu_top_0_usr_irq_req 1 1 1 350 130n
+preplace netloc xdma_0_axi_aclk 1 0 3 40 220 340J 30 720
+preplace netloc xdma_0_axi_aresetn 1 0 3 20 230 360J 40 730
+preplace netloc xdma_0_usr_irq_ack 1 0 3 30 380 NJ 380 700
+preplace netloc util_ds_buf_0_IBUF_OUT 1 1 1 370J 180n
+preplace netloc vgpu_top_0_m_axis_dma 1 1 1 380 110n
+preplace netloc xdma_0_M_AXIS_H2C_0 1 0 3 40 20 NJ 20 710
+preplace netloc xdma_0_M_AXI_LITE 1 0 3 20 10 NJ 10 700
+preplace netloc xdma_0_pcie_mgt 1 2 1 N 140
+preplace netloc CLK_IN_D_0_1 1 0 1 NJ 300
+levelinfo -pg 1 0 190 540 750
+pagesize -pg 1 -db -bbox -sgen -130 0 880 390
 "
 }
 0
