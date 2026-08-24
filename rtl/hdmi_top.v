@@ -34,13 +34,13 @@ module hdmi_top (
     wire clk_fb;
     wire locked;
 
-    // MMCME2_BASE: 125MHz * 11.875 / 10.0 = 148.4375MHz (~148.5MHz 1080P60)
+    // MMCME2_BASE: 125MHz * 7.125 / 6.0 = 148.4375MHz (VCO = 890.625MHz within 600-1440MHz range)
     MMCME2_BASE #(
         .BANDWIDTH("OPTIMIZED"),
-        .CLKFBOUT_MULT_F(11.875),
+        .CLKFBOUT_MULT_F(7.125),
         .CLKFBOUT_PHASE(0.0),
         .CLKIN1_PERIOD(8.0),        // 125MHz = 8.0ns period
-        .CLKOUT0_DIVIDE_F(10.0),    // 125 * 11.875 / 10 = 148.4375MHz
+        .CLKOUT0_DIVIDE_F(6.0),     // 890.625 / 6.0 = 148.4375MHz (~148.5MHz 1080P60)
         .CLKOUT0_PHASE(0.0),
         .CLKOUT0_DUTY_CYCLE(0.5),
         .DIVCLK_DIVIDE(1)
