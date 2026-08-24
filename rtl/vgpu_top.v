@@ -180,7 +180,7 @@ module vgpu_top (
         .we_gpu                 (fb_we),
         .addr_gpu               (fb_addr),
         .din_gpu                (fb_rgb),
-        .clk_pix                (axi_aclk),
+        .clk_pix                (hdmi_clk),
         .addr_pix               (fb_addr),
         .dout_pix               ()
     );
