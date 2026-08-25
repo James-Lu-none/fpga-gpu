@@ -27,6 +27,10 @@ module top (
     input  wire        sys_clk_clk_n,
     input  wire        sys_rst_n,
 
+    // DDR3 200MHz System Differential Clock (Bank 34: R4/T4)
+    input  wire        sys_clk_p,
+    input  wire        sys_clk_n,
+
     // PCIe Transceiver Lanes (PCIe Gen2 x2)
     input  wire [1:0]  pci_exp_rxp,
     input  wire [1:0]  pci_exp_rxn,
@@ -353,8 +357,8 @@ module top (
         .ddr3_odt       (ddr3_odt),
 
         // System clocks & calibration
-        .sys_clk_p      (sys_clk_clk_p),
-        .sys_clk_n      (sys_clk_clk_n),
+        .sys_clk_p      (sys_clk_p),
+        .sys_clk_n      (sys_clk_n),
         .sys_rst        (sys_rst_n),
         .ui_clk         (),
         .ui_clk_sync_rst(),

@@ -74,10 +74,37 @@ module gpu_compute_core #(
 );
 
     // ---------------------------------------------------------------------
-    // CUDA Shared Memory (SMEM SRAM Array: 256 x 64-bit words)
+    // CUDA Shared Memory (SMEM Distributed LUTRAM Array: 256 x 64-bit words)
+    // Dedicated Single-Process Synchronous Memory Write Logic
     // ---------------------------------------------------------------------
+    (* ram_style = "distributed" *)
     reg [63:0] smem_ram [0:255];
     reg [7:0]  smem_addr;
+
+    localparam ST_IDLE       = 3'd0,
+               ST_TILE_LOAD  = 3'd1,
+               ST_WARP_EXEC  = 3'd2,
+               ST_TILE_STORE = 3'd3,
+               ST_DONE       = 3'd4;
+
+    reg [2:0] tile_state;
+    reg [7:0] tile_cnt;
+
+    // Single-Process Write Control Signals for smem_ram
+    wire        smem_we;
+    wire [7:0]  smem_waddr;
+    wire [63:0] smem_wdata;
+
+    assign smem_we    = (tile_state == ST_TILE_LOAD && m_axi_gmem_rvalid && m_axi_gmem_rready) ||
+                        (s_axis_tready && s_axis_tvalid && opcode == 32'd4);
+    assign smem_waddr = (tile_state == ST_TILE_LOAD) ? tile_cnt : smem_addr;
+    assign smem_wdata = (tile_state == ST_TILE_LOAD) ? m_axi_gmem_rdata : s_axis_tdata;
+
+    always @(posedge clk) begin
+        if (smem_we) begin
+            smem_ram[smem_waddr] <= smem_wdata;
+        end
+    end
 
     // ---------------------------------------------------------------------
     // Hardware Warp Scheduler Instance
@@ -105,18 +132,6 @@ module gpu_compute_core #(
         .thread_id_start        (thread_id_start),
         .grid_done              (grid_done)
     );
-
-    // ---------------------------------------------------------------------
-    // AXI4-Full Tile Load / Execution / Tile Store Engine
-    // ---------------------------------------------------------------------
-    localparam ST_IDLE       = 3'd0,
-               ST_TILE_LOAD  = 3'd1,
-               ST_WARP_EXEC  = 3'd2,
-               ST_TILE_STORE = 3'd3,
-               ST_DONE       = 3'd4;
-
-    reg [2:0] tile_state;
-    reg [7:0] tile_cnt;
 
     // ---------------------------------------------------------------------
     // SIMT Processing Element Array (4-wide Parallel ALUs: PE0 ~ PE3)
@@ -162,7 +177,6 @@ module gpu_compute_core #(
                     end
 
                     if (m_axi_gmem_rvalid && m_axi_gmem_rready) begin
-                        smem_ram[tile_cnt] <= m_axi_gmem_rdata;
                         if (tile_cnt == 8'd255) begin
                             tile_state <= ST_WARP_EXEC;
                         end else begin
@@ -259,9 +273,8 @@ module gpu_compute_core #(
                         end
 
                         32'd4: begin // Opcode 4: Write Stream Payload to CUDA Shared Memory (SMEM SRAM)
-                            smem_ram[smem_addr] <= s_axis_tdata;
-                            m_axis_tdata        <= s_axis_tdata;
-                            fb_we               <= 1'b0;
+                            m_axis_tdata <= s_axis_tdata;
+                            fb_we        <= 1'b0;
                         end
 
                         32'd5: begin // Opcode 5: 4-wide Multi-PE Strided Accumulate (Input + SMEM)
