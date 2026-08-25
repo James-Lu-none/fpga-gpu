@@ -1,7 +1,7 @@
 {
   "design": {
     "design_info": {
-      "boundary_crc": "0x333C1C507D521722",
+      "boundary_crc": "0x5FA3FFC1626CACE0",
       "device": "xc7a200tfbg484-2",
       "gen_directory": "../../../../fpga-gpu.gen/sources_1/bd/design_1",
       "name": "design_1",
@@ -22,19 +22,19 @@
         "vlnv": "xilinx.com:interface:pcie_7x_mgt_rtl:1.0",
         "parameters": {
           "RXN_WIDTH": {
-            "value": "1",
+            "value": "2",
             "value_src": "auto_prop"
           },
           "RXP_WIDTH": {
-            "value": "1",
+            "value": "2",
             "value_src": "auto_prop"
           },
           "TXN_WIDTH": {
-            "value": "1",
+            "value": "2",
             "value_src": "auto_prop"
           },
           "TXP_WIDTH": {
-            "value": "1",
+            "value": "2",
             "value_src": "auto_prop"
           }
         },
@@ -48,25 +48,25 @@
           "rxn": {
             "physical_name": "pcie_mgt_0_rxn",
             "direction": "I",
-            "left": "0",
+            "left": "1",
             "right": "0"
           },
           "rxp": {
             "physical_name": "pcie_mgt_0_rxp",
             "direction": "I",
-            "left": "0",
+            "left": "1",
             "right": "0"
           },
           "txn": {
             "physical_name": "pcie_mgt_0_txn",
             "direction": "O",
-            "left": "0",
+            "left": "1",
             "right": "0"
           },
           "txp": {
             "physical_name": "pcie_mgt_0_txp",
             "direction": "O",
-            "left": "0",
+            "left": "1",
             "right": "0"
           }
         }
@@ -121,6 +121,55 @@
             "value_src": "default"
           }
         }
+      },
+      "hdmi_d": {
+        "direction": "O",
+        "left": "23",
+        "right": "0"
+      },
+      "hdmi_nreset": {
+        "direction": "O"
+      },
+      "hdmi_clk": {
+        "type": "clk",
+        "direction": "O",
+        "parameters": {
+          "CLK_DOMAIN": {
+            "value": "design_1_vgpu_top_0_1_hdmi_clk",
+            "value_src": "default_prop"
+          },
+          "FREQ_HZ": {
+            "value": "148500000",
+            "value_src": "const_prop"
+          },
+          "FREQ_TOLERANCE_HZ": {
+            "value": "0",
+            "value_src": "default"
+          },
+          "INSERT_VIP": {
+            "value": "0",
+            "value_src": "default"
+          },
+          "PHASE": {
+            "value": "0.0",
+            "value_src": "default"
+          }
+        }
+      },
+      "hdmi_hs": {
+        "direction": "O"
+      },
+      "hdmi_vs": {
+        "direction": "O"
+      },
+      "hdmi_de": {
+        "direction": "O"
+      },
+      "hdmi_scl": {
+        "direction": "IO"
+      },
+      "hdmi_sda": {
+        "direction": "IO"
       }
     },
     "components": {
@@ -146,6 +195,9 @@
           },
           "pl_link_cap_max_link_speed": {
             "value": "5.0_GT/s"
+          },
+          "pl_link_cap_max_link_width": {
+            "value": "X2"
           },
           "xdma_axi_intf_mm": {
             "value": "AXI_Stream"
@@ -213,7 +265,7 @@
                 "value_src": "constant"
               },
               "ADDR_WIDTH": {
-                "value": "6",
+                "value": "14",
                 "value_src": "constant"
               },
               "AWUSER_WIDTH": {
@@ -302,7 +354,7 @@
               "AWADDR": {
                 "physical_name": "s_axi_ctrl_awaddr",
                 "direction": "I",
-                "left": "5",
+                "left": "13",
                 "right": "0"
               },
               "AWVALID": {
@@ -350,7 +402,7 @@
               "ARADDR": {
                 "physical_name": "s_axi_ctrl_araddr",
                 "direction": "I",
-                "left": "5",
+                "left": "13",
                 "right": "0"
               },
               "ARVALID": {
@@ -568,6 +620,42 @@
           },
           "usr_irq_ack": {
             "direction": "I"
+          },
+          "hdmi_nreset": {
+            "direction": "O"
+          },
+          "hdmi_clk": {
+            "type": "clk",
+            "direction": "O",
+            "parameters": {
+              "FREQ_HZ": {
+                "value": "148500000",
+                "value_src": "constant"
+              }
+            }
+          },
+          "hdmi_hs": {
+            "direction": "O"
+          },
+          "hdmi_vs": {
+            "direction": "O"
+          },
+          "hdmi_de": {
+            "direction": "O"
+          },
+          "hdmi_d": {
+            "direction": "O",
+            "left": "23",
+            "right": "0"
+          },
+          "hdmi_scl": {
+            "direction": "IO"
+          },
+          "hdmi_sda": {
+            "direction": "IO"
+          },
+          "hdmi_init_done": {
+            "direction": "O"
           }
         }
       },
@@ -618,6 +706,18 @@
       }
     },
     "nets": {
+      "Net": {
+        "ports": [
+          "hdmi_scl",
+          "vgpu_top_0/hdmi_scl"
+        ]
+      },
+      "Net1": {
+        "ports": [
+          "hdmi_sda",
+          "vgpu_top_0/hdmi_sda"
+        ]
+      },
       "sys_rst_n_0_1": {
         "ports": [
           "sys_rst_n",
@@ -628,6 +728,42 @@
         "ports": [
           "util_ds_buf_0/IBUF_OUT",
           "xdma_0/sys_clk"
+        ]
+      },
+      "vgpu_top_0_hdmi_clk": {
+        "ports": [
+          "vgpu_top_0/hdmi_clk",
+          "hdmi_clk"
+        ]
+      },
+      "vgpu_top_0_hdmi_d": {
+        "ports": [
+          "vgpu_top_0/hdmi_d",
+          "hdmi_d"
+        ]
+      },
+      "vgpu_top_0_hdmi_de": {
+        "ports": [
+          "vgpu_top_0/hdmi_de",
+          "hdmi_de"
+        ]
+      },
+      "vgpu_top_0_hdmi_hs": {
+        "ports": [
+          "vgpu_top_0/hdmi_hs",
+          "hdmi_hs"
+        ]
+      },
+      "vgpu_top_0_hdmi_nreset": {
+        "ports": [
+          "vgpu_top_0/hdmi_nreset",
+          "hdmi_nreset"
+        ]
+      },
+      "vgpu_top_0_hdmi_vs": {
+        "ports": [
+          "vgpu_top_0/hdmi_vs",
+          "hdmi_vs"
         ]
       },
       "vgpu_top_0_usr_irq_req": {
