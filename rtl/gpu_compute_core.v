@@ -5,21 +5,21 @@
 // 
 // Create Date: 2026/08/25
 // Design Name: Streaming Multiprocessor (SM) Top Compute Core
-// Module Name: vgpu_compute_core
+// Module Name: gpu_compute_core
 // Project Name: fpga-gpu (Accelerated Computing with Linux Kernel vGPU-Core)
 // Target Devices: Xilinx Artix-7 (XC7A200T-2FBG484)
 // Tool Versions: Vivado 2026+
 // Description: 
 //   NVIDIA GP100-Style Streaming Multiprocessor (SM) Engine with Full DDR3 VRAM Engine:
 //   1. Host H2C DMA writes directly to DDR3 VRAM (0x8000_0000).
-//   2. RISC-V CP triggers vgpu_compute_core passing src_vram_addr and dst_vram_addr.
+//   2. RISC-V CP triggers gpu_compute_core passing src_vram_addr and dst_vram_addr.
 //   3. Parallel Compute Engine uses AXI4-Full Master (m_axi_gmem) to Tile Load DDR3 -> SMEM.
 //   4. Hardware Warp Scheduler dispatches 32-thread Warps across 4-wide SIMD PEs.
 //   5. AXI4-Full Tile Store writes results back to DDR3 VRAM (0x8000_1000).
 //   6. Host C2H DMA reads final results from DDR3 VRAM back to Host.
 ////////////////////////////////////////////////////////////////////////////////--
 
-module vgpu_compute_core #(
+module gpu_compute_core #(
     parameter integer C_AXIS_DATA_WIDTH = 64
 )(
     input  wire                              clk,
@@ -89,7 +89,7 @@ module vgpu_compute_core #(
     wire [31:0] active_mask;
     wire [15:0] thread_id_start;
 
-    vgpu_warp_scheduler u_warp_sched (
+    gpu_warp_scheduler u_warp_sched (
         .clk                    (clk),
         .rst_n                  (rst_n),
         .launch_en              (launch_en),

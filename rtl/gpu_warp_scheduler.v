@@ -5,7 +5,7 @@
 // 
 // Create Date: 2026/08/25
 // Design Name: Hardware Warp Scheduler RTL
-// Module Name: vgpu_warp_scheduler
+// Module Name: gpu_warp_scheduler
 // Project Name: fpga-gpu (Accelerated Computing with Linux Kernel vGPU-Core)
 // Target Devices: Xilinx Artix-7 (XC7A200T-2FBG484)
 // Tool Versions: Vivado 2026+
@@ -15,7 +15,7 @@
 //   Manages Active Warp States, Issue Logic, and Thread Active Masks.
 ////////////////////////////////////////////////////////////////////////////////--
 
-module vgpu_warp_scheduler #(
+module gpu_warp_scheduler #(
     parameter integer WARP_SIZE = 32
 )(
     input  wire        clk,

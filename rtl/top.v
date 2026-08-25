@@ -16,7 +16,7 @@
 //   - 256-bit 2-Slave to 1-Master AXI Crossbar Interconnect (axi_crossbar_0)
 //   - 1GB DDR3 VRAM Controller (mig_7series_0 at 0x8000_0000)
 //   - RISC-V Command Processor SoC (riscv_cp_system with 16KB BRAM Mailbox at 0x3F00)
-//   - GPGPU Streaming Multiprocessor (vgpu_compute_core with Hardware Warp Scheduler)
+//   - GPGPU Streaming Multiprocessor (gpu_compute_core with Hardware Warp Scheduler)
 //   - Dual-Port Framebuffer VRAM (framebuffer_ram)
 //   - SiI9134 HDMI 1080P@60Hz Display Pipeline (hdmi_top)
 ////////////////////////////////////////////////////////////////////////////////--
@@ -488,7 +488,7 @@ module top (
     // -------------------------------------------------------------------------
     // 9. GPGPU Streaming Multiprocessor (SM) Compute Core Instance
     // -------------------------------------------------------------------------
-    vgpu_compute_core #(
+    gpu_compute_core #(
         .C_AXIS_DATA_WIDTH(64)
     ) u_compute_core (
         .clk                    (axi_aclk),

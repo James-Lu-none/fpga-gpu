@@ -61,23 +61,23 @@
 ### 3.1 建立與配置系統框圖
 1. 左側 **Flow Navigator** ➔ 點擊 **Create Block Design**（命名為 `design_1`）。
 2. **加入官方 IP**：在畫布點擊 `+` (Add IP)，搜尋並加入 `DMA/Bridge Subsystem for PCI Express` (XDMA)。
-3. **加入自訂 RTL 模組**：在畫布空白處右鍵 ➔ **Add Module...** ➔ 選取 `vgpu_top`。
+3. **加入自訂 RTL 模組**：在畫布空白處右鍵 ➔ **Add Module...** ➔ 選取 `gpu_top`。
 4. **雙擊 XDMA 配置**：
    * **Basic**：Mode 設為 `DMA`，Lane Width 設為 `X2` (PCIe Gen2 x2)，Interface 設為 `AXI Stream`。
    * **PCIe BARs**：勾選 **PCIe to AXI Lite Master Interface**，BAR0 Size 設為 `64 KB`。
    * **PCIe Misc**：勾選 **MSI 64-bit**，User Interrupts 設為 `1`。
 
 ### 3.2 訊號連線與外部引腳 (Make External)
-1. **AXI 控制線**：`xdma_0/M_AXI_LITE` ──> `vgpu_top/s_axi_ctrl`
+1. **AXI 控制線**：`xdma_0/M_AXI_LITE` ──> `gpu_top/s_axi_ctrl`
 2. **AXI-Stream 資料線**：
-   * 下行 H2C：`xdma_0/M_AXIS_H2C_0` ──> `vgpu_top/s_axis_dma`
-   * 上行 C2H：`vgpu_top/m_axis_dma` ──> `xdma_0/S_AXIS_C2H_0`
-3. **MSI 中斷線**：`vgpu_top/usr_irq_req` ──> `xdma_0/usr_irq_req[0]`
+   * 下行 H2C：`xdma_0/M_AXIS_H2C_0` ──> `gpu_top/s_axis_dma`
+   * 上行 C2H：`gpu_top/m_axis_dma` ──> `xdma_0/S_AXIS_C2H_0`
+3. **MSI 中斷線**：`gpu_top/usr_irq_req` ──> `xdma_0/usr_irq_req[0]`
 4. **外部物理腳位 (Make External)**：在 `xdma_0` 的 `sys_clk`、`sys_rst_n` 與 `pcie_mgt` 上點右鍵 ➔ 選擇 **Make External**。
 
 ### 3.3 自動 DRC 檢查與 Address Editor
 1. **自動 DRC 驗證**：按下快捷鍵 **`F6`** (Validate Design)，Vivado 會自動檢查 Bus 寬度、時脈域 (Clock Domain) 與未連接的引腳。
-2. **位址映射 (Address Editor)**：切換至 **Address Editor** 分頁，將 `vgpu_top` 的 `s_axi_ctrl` 映射至位址 `0x4000_0000` (64KB)。
+2. **位址映射 (Address Editor)**：切換至 **Address Editor** 分頁，將 `gpu_top` 的 `s_axi_ctrl` 映射至位址 `0x4000_0000` (64KB)。
 3. **產生頂層 Wrapper**：在 Sources 視窗中對 `design_1.bd` 右鍵 ➔ **Create HDL Wrapper** ➔ 選擇 *Let Vivado manage wrapper*。
 
 ---
@@ -94,10 +94,10 @@
 ### 4.2 顯示樹狀階層 Netlist 視窗
 若找不到左側的模組階層樹：
 1. 點擊 Vivado 頂部主選單 **Window** ➔ 勾選 **Netlist**（或 **Hierarchy**）。
-2. 左側會彈出 **Netlist** 面板，展示 `vgpu_top` 及其內部的 `u_regs` 與 `u_compute_core` 樹狀結構。
+2. 左側會彈出 **Netlist** 面板，展示 `gpu_top` 及其內部的 `u_regs` 與 `u_compute_core` 樹狀結構。
 
 ### 4.3 展開內部子模組電路
-* 在 Schematic 或 Netlist 視窗中選中任何子模組（如 `vgpu_top`），按下快捷鍵 **`F4`**（或右鍵 ➔ **Schematic**），即可深入查看該模組內部的邏輯閘與暫存器連線！
+* 在 Schematic 或 Netlist 視窗中選中任何子模組（如 `gpu_top`），按下快捷鍵 **`F4`**（或右鍵 ➔ **Schematic**），即可深入查看該模組內部的邏輯閘與暫存器連線！
 
 ---
 
@@ -107,7 +107,7 @@
 
 ### 5.1 加入 Simulation Testbench 檔案
 1. **Add Sources** ➔ 選擇 **Add or create simulation sources** ➔ 點擊 **Next**。
-2. 選取測試檔（如 `tb_vgpu_top.v`）並匯入專案。
+2. 選取測試檔（如 `tb_gpu_top.v`）並匯入專案。
 
 ### 5.2 執行行為模擬 (Behavioral Simulation)
 1. 左側 **Flow Navigator** ➔ **Simulation** ➔ 點擊 **Run Simulation** ➔ **Run Behavioral Simulation**。

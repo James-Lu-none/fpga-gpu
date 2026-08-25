@@ -4,7 +4,7 @@
 
 ### pcie ip
 
-originally, a custom pcie ip (`axi_pcie` + custom `vgpu_dma_master.v` + software page table) was used to communicate with the host. However, it was later replaced with the XDMA IP (`DMA/Bridge Subsystem for PCI Express` in AXI-Stream mode) provided by Xilinx to support Scatter-Gather (SG) DMA via Linux `dma_map_sg()`.
+originally, a custom pcie ip (`axi_pcie` + custom `gpu_dma_master.v` + software page table) was used to communicate with the host. However, it was later replaced with the XDMA IP (`DMA/Bridge Subsystem for PCI Express` in AXI-Stream mode) provided by Xilinx to support Scatter-Gather (SG) DMA via Linux `dma_map_sg()`.
 
 ### riscv command processor (cp) softcore
 
@@ -17,11 +17,11 @@ To mirror modern GPGPU hardware architectures (e.g. NVIDIA GSP / AMD CP):
      - **Port B**: Connected directly to PCIe XDMA BAR0 MMIO for Host PC direct Mailbox writes (`0x3F00`).
   3. **`riscv_cp_system.v` (SoC Top & Direct Mailbox Interconnect)**:
      - Detects Host writes to Mailbox address `0x3F00` and generates a 1-cycle hardware interrupt pulse (`irq[0]`).
-     - Routes RISC-V AXI Master to `vgpu_compute_core` (`0x4000_0000`) and HDMI SiI9134 I2C controller (`0x5000_0000`).
+     - Routes RISC-V AXI Master to `gpu_compute_core` (`0x4000_0000`) and HDMI SiI9134 I2C controller (`0x5000_0000`).
 - **Role**:
   1. Offloads SiI9134 HDMI display controller I2C configuration.
   2. Interrupt-driven parsing of Host PCIe CUDA Task Descriptors directly from BRAM Mailbox (`0x3F00`).
-  3. Dispatches parallel execution tasks to `vgpu_compute_core` SIMD ALUs.
+  3. Dispatches parallel execution tasks to `gpu_compute_core` SIMD ALUs.
 - **Resource Footprint**: Consumes ~1,200 LUTs (< 1.5% of Artix-7 XC7A200T resources) with 16KB dual-port on-chip BRAM.
 
 ### clock and reset architecture
@@ -32,11 +32,11 @@ To mirror modern GPGPU hardware architectures (e.g. NVIDIA GSP / AMD CP):
   - A Utility Buffer IP (`util_ds_buf`) with `C_BUF_TYPE` set to `IBUFDSGTE` (`IBUFDS_GTE2`) is instantiated in Block Design (`design_1.bd`) to convert the differential clock input into `IBUF_OUT` for `xdma_0/sys_clk`.
 - **System Reset & Internal Clocking**:
   - External PCIe reset `sys_rst_n` (`T18`) feeds directly into `xdma_0/sys_rst_n`.
-  - All internal user modules (`vgpu_top`, `vgpu_regs_slave_lite_v1_0_S00_AXI`, `vgpu_compute_core`) operate on XDMA's generated clock `xdma_0/axi_aclk` (125MHz) and active-low reset `xdma_0/axi_aresetn`.
+  - All internal user modules (`gpu_top`, `gpu_regs_slave_lite_v1_0_S00_AXI`, `gpu_compute_core`) operate on XDMA's generated clock `xdma_0/axi_aclk` (125MHz) and active-low reset `xdma_0/axi_aresetn`.
 
 ### GPU AXI4 peripheral (register space) logic modifications
 
-The register space is built using Vivado IP Wizard generated AXI4-Lite Slave peripheral ([`rtl/vgpu_regs_slave_lite_v1_0_S00_AXI.v`](file:///c:/Users/user/workspace/fpga-gpu/rtl/vgpu_regs_slave_lite_v1_0_S00_AXI.v)).
+The register space is built using Vivado IP Wizard generated AXI4-Lite Slave peripheral ([`rtl/gpu_regs_slave_lite_v1_0_S00_AXI.v`](file:///c:/Users/user/workspace/fpga-gpu/rtl/gpu_regs_slave_lite_v1_0_S00_AXI.v)).
 
 1. **Pristine Register Case**:
    - The wizard-generated AXI-Lite write `case` statement remains 100% untouched for standard register write storage (`slv_reg0` .. `slv_reg15`).
@@ -61,7 +61,7 @@ The register space is built using Vivado IP Wizard generated AXI4-Lite Slave per
 
 ### cuda compute core & shared memory (smem) hierarchy
 
-- **SIMD Vector Compute Core ([`rtl/vgpu_compute_core.v`](file:///c:/Users/user/workspace/fpga-gpu/rtl/vgpu_compute_core.v))**:
+- **SIMD Vector Compute Core ([`rtl/gpu_compute_core.v`](file:///c:/Users/user/workspace/fpga-gpu/rtl/gpu_compute_core.v))**:
   - Implements an AXI4-Stream 64-bit SIMD vector compute pipeline.
   - **CUDA Shared Memory (SMEM / Scratchpad SRAM)**: Integrates an ultra-fast 256-word x 64-bit On-Chip SRAM inside the core, mirroring modern NVIDIA GPU Memory Hierarchies (RMEM/SMEM tier).
   - **Supported Opcodes**:
@@ -74,5 +74,5 @@ The register space is built using Vivado IP Wizard generated AXI4-Lite Slave per
 ### framebuffer & hdmi parallel rendering pipeline
 
 - **Dual-Port Framebuffer VRAM ([`rtl/framebuffer_ram.v`](file:///c:/Users/user/workspace/fpga-gpu/rtl/framebuffer_ram.v))**:
-  - Bridges GPU SIMD Compute Core parallel rendering output (`vgpu_compute_core.v` Opcode 3) to SiI9134 HDMI Transmitter display pipeline.
+  - Bridges GPU SIMD Compute Core parallel rendering output (`gpu_compute_core.v` Opcode 3) to SiI9134 HDMI Transmitter display pipeline.
   - Allows Host CUDA Kernels to submit parallel render jobs, compute 24-bit RGB pixel data on FPGA SIMD cores, write directly to Framebuffer VRAM, and output real-time 1080P/720P video over HDMI!
