@@ -186,6 +186,7 @@ module top (
     // -------------------------------------------------------------------------
     // 3. PCIe XDMA Subsystem IP Instance (xdma_0)
     // -------------------------------------------------------------------------
+    (* DONT_TOUCH = "true" *)
     xdma_0 u_xdma (
         .sys_clk         (pcie_ref_clk),
         .sys_rst_n       (sys_rst_n),

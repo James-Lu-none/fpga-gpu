@@ -18,12 +18,10 @@ set_property IOSTANDARD LVCMOS33 [get_ports sys_rst_n]
 set_property PULLUP true [get_ports sys_rst_n]
 
 # -------------------------------------------------------------------------
-# Transceiver Note:
-# Artix-7 uses GTP (Gigabit Transceiver with low Power) Transceivers (Bank 216: D9/C9, B10/A10, D7/C7, B6/A6).
-# Since sys_clk is locked to F10/E10 (MGTREFCLK0 of Quad 216), Vivado
-# automatically binds PCIe x2 lanes (Lane 0 & Lane 1) to the dedicated
-# hard GTP transceiver pins, so we don't have to set the LOC constraints for them.
+# Prevent Vivado opt_design from trimming XDMA PCIe Hard Macro reset cells (Opt 31-67)
 # -------------------------------------------------------------------------
+set_property DONT_TOUCH true [get_cells -hierarchical -filter {NAME =~ *u_xdma*}]
+
 
 # -------------------------------------------------------------------------
 # Configuration Voltage & SPI Flash Bitstream Options
