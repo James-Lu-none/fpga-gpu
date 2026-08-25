@@ -14,7 +14,9 @@
 //   - PCIe Gen2 x2 XDMA Subsystem (xdma_0)
 //   - 64-bit to 256-bit AXI Data Width Converter (axi_dwidth_converter_0)
 //   - 256-bit 2-Slave to 1-Master AXI Crossbar Interconnect (axi_crossbar_0)
-//   - 1GB DDR3 VRAM Controller (mig_7series_0 at 0x8000_0000)
+//     * S00: Host PCIe DMA (via Converter) -> DDR3 VRAM 0x8000_0000
+//     * S01: GPGPU SM Compute Core (gpu_compute_core) -> DDR3 VRAM 0x8000_0000
+//     * M00: 1GB DDR3 VRAM Controller (mig_7series_0 at 0x8000_0000)
 //   - RISC-V Command Processor SoC (riscv_cp_system with 16KB BRAM Mailbox at 0x3F00)
 //   - GPGPU Streaming Multiprocessor (gpu_compute_core with Hardware Warp Scheduler)
 //   - Dual-Port Framebuffer VRAM (framebuffer_ram)
@@ -85,8 +87,11 @@ module top (
     wire user_lnk_up;
 
     // Interrupt Signals
+    wire grid_done;
     wire usr_irq_req;
     wire usr_irq_ack;
+
+    assign usr_irq_req = grid_done;
 
     // -------------------------------------------------------------------------
     // 2. AXI Bus Signals
@@ -130,58 +135,85 @@ module top (
     wire        xdma_m_axi_rready;
 
     // Converted 256-bit XDMA AXI4 Master Signals
-    wire [31:0] conv_m_axi_awaddr;
-    wire [7:0]  conv_m_axi_awlen;
-    wire        conv_m_axi_awvalid;
-    wire        conv_m_axi_awready;
+    wire [31:0]  conv_m_axi_awaddr;
+    wire [7:0]   conv_m_axi_awlen;
+    wire         conv_m_axi_awvalid;
+    wire         conv_m_axi_awready;
     wire [255:0] conv_m_axi_wdata;
-    wire [31:0] conv_m_axi_wstrb;
-    wire        conv_m_axi_wvalid;
-    wire        conv_m_axi_wready;
-    wire        conv_m_axi_bvalid;
-    wire        conv_m_axi_bready;
-    wire [31:0] conv_m_axi_araddr;
-    wire [7:0]  conv_m_axi_arlen;
-    wire        conv_m_axi_arvalid;
-    wire        conv_m_axi_arready;
+    wire [31:0]  conv_m_axi_wstrb;
+    wire         conv_m_axi_wvalid;
+    wire         conv_m_axi_wready;
+    wire         conv_m_axi_bvalid;
+    wire         conv_m_axi_bready;
+    wire [31:0]  conv_m_axi_araddr;
+    wire [7:0]   conv_m_axi_arlen;
+    wire         conv_m_axi_arvalid;
+    wire         conv_m_axi_arready;
     wire [255:0] conv_m_axi_rdata;
-    wire        conv_m_axi_rvalid;
-    wire        conv_m_axi_rready;
+    wire         conv_m_axi_rvalid;
+    wire         conv_m_axi_rready;
 
-    // GPGPU Compute Core 256-bit AXI4 Master Signals
-    wire [63:0] core_m_axi_araddr;
-    wire [7:0]  core_m_axi_arlen;
-    wire        core_m_axi_arvalid;
-    wire        core_m_axi_arready;
-    wire [63:0] core_m_axi_rdata;
-    wire        core_m_axi_rvalid;
-    wire        core_m_axi_rready;
-    wire [63:0] core_m_axi_awaddr;
-    wire [7:0]  core_m_axi_awlen;
-    wire        core_m_axi_awvalid;
-    wire        core_m_axi_awready;
-    wire [63:0] core_m_axi_wdata;
-    wire        core_m_axi_wvalid;
-    wire        core_m_axi_wready;
+    // GPGPU Compute Core Native 256-bit AXI4 Master Signals
+    wire [31:0]  core_m_axi_araddr;
+    wire [7:0]   core_m_axi_arlen;
+    wire         core_m_axi_arvalid;
+    wire         core_m_axi_arready;
+    wire [255:0] core_m_axi_rdata;
+    wire         core_m_axi_rvalid;
+    wire         core_m_axi_rready;
+    wire [31:0]  core_m_axi_awaddr;
+    wire [7:0]   core_m_axi_awlen;
+    wire         core_m_axi_awvalid;
+    wire         core_m_axi_awready;
+    wire [255:0] core_m_axi_wdata;
+    wire [31:0]  core_m_axi_wstrb;
+    wire         core_m_axi_wvalid;
+    wire         core_m_axi_wready;
+    wire         core_m_axi_bvalid;
+    wire         core_m_axi_bready;
+
+    assign core_m_axi_bready = 1'b1;
 
     // Crossbar 256-bit Master Signals to MIG DDR3
-    wire [31:0] xbar_m_axi_awaddr;
-    wire [7:0]  xbar_m_axi_awlen;
-    wire        xbar_m_axi_awvalid;
-    wire        xbar_m_axi_awready;
+    wire [31:0]  xbar_m_axi_awaddr;
+    wire [7:0]   xbar_m_axi_awlen;
+    wire         xbar_m_axi_awvalid;
+    wire         xbar_m_axi_awready;
     wire [255:0] xbar_m_axi_wdata;
-    wire [31:0] xbar_m_axi_wstrb;
-    wire        xbar_m_axi_wvalid;
-    wire        xbar_m_axi_wready;
-    wire        xbar_m_axi_bvalid;
-    wire        xbar_m_axi_bready;
-    wire [31:0] xbar_m_axi_araddr;
-    wire [7:0]  xbar_m_axi_arlen;
-    wire        xbar_m_axi_arvalid;
-    wire        xbar_m_axi_arready;
+    wire [31:0]  xbar_m_axi_wstrb;
+    wire         xbar_m_axi_wvalid;
+    wire         xbar_m_axi_wready;
+    wire         xbar_m_axi_bvalid;
+    wire         xbar_m_axi_bready;
+    wire [31:0]  xbar_m_axi_araddr;
+    wire [7:0]   xbar_m_axi_arlen;
+    wire         xbar_m_axi_arvalid;
+    wire         xbar_m_axi_arready;
     wire [255:0] xbar_m_axi_rdata;
-    wire        xbar_m_axi_rvalid;
-    wire        xbar_m_axi_rready;
+    wire         xbar_m_axi_rvalid;
+    wire         xbar_m_axi_rready;
+
+    // Crossbar 2-Slave Response Signal Demux Vectors
+    wire [1:0]   xbar_s_bvalid;
+    wire [1:0]   xbar_s_rvalid;
+    wire [1:0]   xbar_s_awready;
+    wire [1:0]   xbar_s_wready;
+    wire [1:0]   xbar_s_arready;
+    wire [511:0] xbar_s_rdata;
+
+    assign conv_m_axi_awready = xbar_s_awready[0];
+    assign core_m_axi_awready = xbar_s_awready[1];
+    assign conv_m_axi_wready  = xbar_s_wready[0];
+    assign core_m_axi_wready  = xbar_s_wready[1];
+    assign conv_m_axi_bvalid  = xbar_s_bvalid[0];
+    assign core_m_axi_bvalid  = xbar_s_bvalid[1];
+    assign conv_m_axi_arready = xbar_s_arready[0];
+    assign core_m_axi_arready = xbar_s_arready[1];
+    assign conv_m_axi_rvalid  = xbar_s_rvalid[0];
+    assign core_m_axi_rvalid  = xbar_s_rvalid[1];
+
+    assign conv_m_axi_rdata   = xbar_s_rdata[255:0];
+    assign core_m_axi_rdata   = xbar_s_rdata[511:256];
 
     // -------------------------------------------------------------------------
     // 3. PCIe XDMA Subsystem IP Instance (xdma_0)
@@ -292,30 +324,30 @@ module top (
     );
 
     // -------------------------------------------------------------------------
-    // 5. 256-bit 2-in 1-out AXI Crossbar Interconnect Instance (axi_crossbar_0)
+    // 5. 256-bit 2-Slave to 1-Master AXI Crossbar Interconnect Instance (axi_crossbar_0)
     // -------------------------------------------------------------------------
     axi_crossbar_0 u_crossbar (
         .aclk           (axi_aclk),
         .aresetn        (axi_aresetn),
 
-        // Slave Port 0 (S00: Converted 256-bit Host PCIe DMA)
-        .s_axi_awaddr   ({32'd0, conv_m_axi_awaddr}),
-        .s_axi_awlen    ({8'd0, conv_m_axi_awlen}),
-        .s_axi_awvalid  ({1'b0, conv_m_axi_awvalid}),
-        .s_axi_awready  (conv_m_axi_awready),
-        .s_axi_wdata    ({256'd0, conv_m_axi_wdata}),
-        .s_axi_wstrb    ({32'd0, conv_m_axi_wstrb}),
-        .s_axi_wvalid   ({1'b0, conv_m_axi_wvalid}),
-        .s_axi_wready   (conv_m_axi_wready),
-        .s_axi_bvalid   (conv_m_axi_bvalid),
-        .s_axi_bready   ({1'b0, conv_m_axi_bready}),
-        .s_axi_araddr   ({32'd0, conv_m_axi_araddr}),
-        .s_axi_arlen    ({8'd0, conv_m_axi_arlen}),
-        .s_axi_arvalid  ({1'b0, conv_m_axi_arvalid}),
-        .s_axi_arready  (conv_m_axi_arready),
-        .s_axi_rdata    (conv_m_axi_rdata),
-        .s_axi_rvalid   (conv_m_axi_rvalid),
-        .s_axi_rready   ({1'b0, conv_m_axi_rready}),
+        // Slave Ports (S00 = Host PCIe DMA 256-bit, S01 = GPGPU SM Compute Core 256-bit)
+        .s_axi_awaddr   ({core_m_axi_awaddr, conv_m_axi_awaddr}),
+        .s_axi_awlen    ({core_m_axi_awlen,  conv_m_axi_awlen}),
+        .s_axi_awvalid  ({core_m_axi_awvalid, conv_m_axi_awvalid}),
+        .s_axi_awready  (xbar_s_awready),
+        .s_axi_wdata    ({core_m_axi_wdata,  conv_m_axi_wdata}),
+        .s_axi_wstrb    ({core_m_axi_wstrb,  conv_m_axi_wstrb}),
+        .s_axi_wvalid   ({core_m_axi_wvalid, conv_m_axi_wvalid}),
+        .s_axi_wready   (xbar_s_wready),
+        .s_axi_bvalid   (xbar_s_bvalid),
+        .s_axi_bready   ({core_m_axi_bready, conv_m_axi_bready}),
+        .s_axi_araddr   ({core_m_axi_araddr, conv_m_axi_araddr}),
+        .s_axi_arlen    ({core_m_axi_arlen,  conv_m_axi_arlen}),
+        .s_axi_arvalid  ({core_m_axi_arvalid, conv_m_axi_arvalid}),
+        .s_axi_arready  (xbar_s_arready),
+        .s_axi_rdata    (xbar_s_rdata),
+        .s_axi_rvalid   (xbar_s_rvalid),
+        .s_axi_rready   ({core_m_axi_rready, conv_m_axi_rready}),
 
         // Master Port 0 (M00: 256-bit to MIG DDR3 S_AXI)
         .m_axi_awaddr   (xbar_m_axi_awaddr),
@@ -493,9 +525,7 @@ module top (
     // -------------------------------------------------------------------------
     // 9. GPGPU Streaming Multiprocessor (SM) Compute Core Instance
     // -------------------------------------------------------------------------
-    gpu_compute_core #(
-        .C_AXIS_DATA_WIDTH(64)
-    ) u_compute_core (
+    gpu_compute_core u_compute_core (
         .clk                    (axi_aclk),
         .rst_n                  (axi_aresetn),
         .opcode                 (compute_opcode),
@@ -506,9 +536,9 @@ module top (
         .block_dim_y            (16'd1),
         .src_vram_addr          (64'h0000_0000_8000_0000),
         .dst_vram_addr          (64'h0000_0000_8000_1000),
-        .grid_done              (),
+        .grid_done              (grid_done),
 
-        // AXI4-Full Master Interface (256-bit to Crossbar S01)
+        // 256-bit AXI4-Full Master Interface (Direct to Crossbar S01)
         .m_axi_gmem_araddr      (core_m_axi_araddr),
         .m_axi_gmem_arlen       (core_m_axi_arlen),
         .m_axi_gmem_arvalid     (core_m_axi_arvalid),
@@ -521,19 +551,10 @@ module top (
         .m_axi_gmem_awvalid     (core_m_axi_awvalid),
         .m_axi_gmem_awready     (core_m_axi_awready),
         .m_axi_gmem_wdata       (core_m_axi_wdata),
+        .m_axi_gmem_wstrb       (core_m_axi_wstrb),
         .m_axi_gmem_wvalid      (core_m_axi_wvalid),
         .m_axi_gmem_wready      (core_m_axi_wready),
 
-        .s_axis_tdata           (64'd0),
-        .s_axis_tkeep           (8'd0),
-        .s_axis_tvalid          (1'b0),
-        .s_axis_tready          (),
-        .s_axis_tlast           (1'b0),
-        .m_axis_tdata           (),
-        .m_axis_tkeep           (),
-        .m_axis_tvalid          (),
-        .m_axis_tready          (1'b1),
-        .m_axis_tlast           (),
         .fb_we                  (fb_we),
         .fb_addr                (fb_addr),
         .fb_rgb                 (fb_rgb)
