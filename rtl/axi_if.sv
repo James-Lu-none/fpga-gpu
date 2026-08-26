@@ -20,53 +20,53 @@ interface axi4_if #(
     parameter integer ID_W   = 1
 );
     // Write Address Channel
-    logic [ID_W-1:0]     awid;
-    logic [ADDR_W-1:0]   awaddr;
-    logic [7:0]          awlen;
-    logic [2:0]          awsize;
-    logic [1:0]          awburst;
-    logic                awlock;
-    logic [3:0]          awcache;
-    logic [2:0]          awprot;
-    logic [3:0]          awqos;
-    logic [3:0]          awregion;
-    logic                awvalid;
-    logic                awready;
+    logic [ID_W-1:0]     awid;      // Write address ID
+    logic [ADDR_W-1:0]   awaddr;    // Write address
+    logic [7:0]          awlen;     // Burst length
+    logic [2:0]          awsize;    // Burst size
+    logic [1:0]          awburst;   // Burst type
+    logic                awlock;    // Lock type
+    logic [3:0]          awcache;   // Memory type
+    logic [2:0]          awprot;    // Protection type
+    logic [3:0]          awqos;     // Quality of Service
+    logic [3:0]          awregion;  // Region identifier
+    logic                awvalid;   // Write address valid
+    logic                awready;   // Write address ready
 
     // Write Data Channel
-    logic [DATA_W-1:0]   wdata;
-    logic [(DATA_W/8)-1:0] wstrb;
-    logic                wlast;
-    logic                wvalid;
-    logic                wready;
+    logic [DATA_W-1:0]   wdata;     // Write data
+    logic [(DATA_W/8)-1:0] wstrb;     // Write strobes
+    logic                wlast;     // Write last
+    logic                wvalid;    // Write valid
+    logic                wready;    // Write ready
 
     // Write Response Channel
-    logic [ID_W-1:0]     bid;
-    logic [1:0]          bresp;
-    logic                bvalid;
-    logic                bready;
+    logic [ID_W-1:0]     bid;       // Response ID
+    logic [1:0]          bresp;     // Write response
+    logic                bvalid;    // Write response valid
+    logic                bready;    // Response ready
 
     // Read Address Channel
-    logic [ID_W-1:0]     arid;
-    logic [ADDR_W-1:0]   araddr;
-    logic [7:0]          arlen;
-    logic [2:0]          arsize;
-    logic [1:0]          arburst;
-    logic                arlock;
-    logic [3:0]          arcache;
-    logic [2:0]          arprot;
-    logic [3:0]          arqos;
-    logic [3:0]          arregion;
-    logic                arvalid;
-    logic                arready;
+    logic [ID_W-1:0]     arid;      // Read address ID
+    logic [ADDR_W-1:0]   araddr;    // Read address
+    logic [7:0]          arlen;     // Burst length
+    logic [2:0]          arsize;    // Burst size
+    logic [1:0]          arburst;   // Burst type
+    logic                arlock;    // Lock type
+    logic [3:0]          arcache;   // Memory type
+    logic [2:0]          arprot;    // Protection type
+    logic [3:0]          arqos;     // Quality of Service
+    logic [3:0]          arregion;  // Region identifier
+    logic                arvalid;   // Read address valid
+    logic                arready;   // Read address ready
 
     // Read Data Channel
-    logic [ID_W-1:0]     rid;
-    logic [DATA_W-1:0]   rdata;
-    logic [1:0]          rresp;
-    logic                rlast;
-    logic                rvalid;
-    logic                rready;
+    logic [ID_W-1:0]     rid;       // Read ID tag
+    logic [DATA_W-1:0]   rdata;     // Read data
+    logic [1:0]          rresp;     // Read response
+    logic                rlast;     // Read last
+    logic                rvalid;    // Read valid
+    logic                rready;    // Read ready
 
     // Master Modport (For Drivers / Masters like XDMA & GPGPU Core)
     modport master (
@@ -103,33 +103,33 @@ interface axi_lite_if #(
     parameter integer DATA_W = 32
 );
     // Write Address Channel
-    logic [ADDR_W-1:0]   awaddr;
-    logic [2:0]          awprot;
-    logic                awvalid;
-    logic                awready;
+    logic [ADDR_W-1:0]   awaddr;    // Write address
+    logic [2:0]          awprot;    // Protection type
+    logic                awvalid;   // Write address valid
+    logic                awready;   // Write address ready
 
     // Write Data Channel
-    logic [DATA_W-1:0]   wdata;
-    logic [(DATA_W/8)-1:0] wstrb;
-    logic                wvalid;
-    logic                wready;
+    logic [DATA_W-1:0]   wdata;     // Write data
+    logic [(DATA_W/8)-1:0] wstrb;     // Write strobes
+    logic                wvalid;    // Write valid
+    logic                wready;    // Write ready
 
     // Write Response Channel
-    logic [1:0]          bresp;
-    logic                bvalid;
-    logic                bready;
+    logic [1:0]          bresp;     // Write response
+    logic                bvalid;    // Write response valid
+    logic                bready;    // Response ready
 
     // Read Address Channel
-    logic [ADDR_W-1:0]   araddr;
-    logic [2:0]          arprot;
-    logic                arvalid;
-    logic                arready;
+    logic [ADDR_W-1:0]   araddr;    // Read address
+    logic [2:0]          arprot;    // Protection type
+    logic                arvalid;   // Read address valid
+    logic                arready;   // Read address ready
 
     // Read Data Channel
-    logic [DATA_W-1:0]   rdata;
-    logic [1:0]          rresp;
-    logic                rvalid;
-    logic                rready;
+    logic [DATA_W-1:0]   rdata;     // Read data
+    logic [1:0]          rresp;     // Read response
+    logic                rvalid;    // Read valid
+    logic                rready;    // Read ready
 
     // Master Modport
     modport master (
