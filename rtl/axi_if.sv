@@ -29,6 +29,7 @@ interface axi4_if #(
     logic [3:0]          awcache;
     logic [2:0]          awprot;
     logic [3:0]          awqos;
+    logic [3:0]          awregion;
     logic                awvalid;
     logic                awready;
 
@@ -55,6 +56,7 @@ interface axi4_if #(
     logic [3:0]          arcache;
     logic [2:0]          arprot;
     logic [3:0]          arqos;
+    logic [3:0]          arregion;
     logic                arvalid;
     logic                arready;
 
@@ -68,13 +70,13 @@ interface axi4_if #(
 
     // Master Modport (For Drivers / Masters like XDMA & GPGPU Core)
     modport master (
-        output awid, awaddr, awlen, awsize, awburst, awlock, awcache, awprot, awqos, awvalid,
+        output awid, awaddr, awlen, awsize, awburst, awlock, awcache, awprot, awqos, awregion, awvalid,
         input  awready,
         output wdata, wstrb, wlast, wvalid,
         input  wready,
         input  bid, bresp, bvalid,
         output bready,
-        output arid, araddr, arlen, arsize, arburst, arlock, arcache, arprot, arqos, arvalid,
+        output arid, araddr, arlen, arsize, arburst, arlock, arcache, arprot, arqos, arregion, arvalid,
         input  arready,
         input  rid, rdata, rresp, rlast, rvalid,
         output rready
@@ -82,13 +84,13 @@ interface axi4_if #(
 
     // Slave Modport (For Receivers / Slaves like Crossbar & MIG DDR3)
     modport slave (
-        input  awid, awaddr, awlen, awsize, awburst, awlock, awcache, awprot, awqos, awvalid,
+        input  awid, awaddr, awlen, awsize, awburst, awlock, awcache, awprot, awqos, awregion, awvalid,
         output awready,
         input  wdata, wstrb, wlast, wvalid,
         output wready,
         output bid, bresp, bvalid,
         input  bready,
-        input  arid, araddr, arlen, arsize, arburst, arlock, arcache, arprot, arqos, arvalid,
+        input  arid, araddr, arlen, arsize, arburst, arlock, arcache, arprot, arqos, arregion, arvalid,
         output arready,
         output rid, rdata, rresp, rlast, rvalid,
         input  rready
