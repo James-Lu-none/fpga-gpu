@@ -12,42 +12,15 @@ module riscv_cp_system (
     // ---------------------------------------------------------------------
     // Host PCIe XDMA AXI-Lite Slave Interface (Direct BAR0 BRAM & Mailbox)
     // ---------------------------------------------------------------------
-    input  wire        s_axi_awvalid,
-    output wire        s_axi_awready,
-    input  wire [31:0] s_axi_awaddr,
-    input  wire        s_axi_wvalid,
-    output wire        s_axi_wready,
-    input  wire [31:0] s_axi_wdata,
-    input  wire [ 3:0] s_axi_wstrb,
-    output wire        s_axi_bvalid,
-    input  wire        s_axi_bready,
-
-    input  wire        s_axi_arvalid,
-    output wire        s_axi_arready,
-    input  wire [31:0] s_axi_araddr,
-    output wire        s_axi_rvalid,
-    input  wire        s_axi_rready,
-    output wire [31:0] s_axi_rdata,
+    axi_lite_if.slave s_axi,
 
     // ---------------------------------------------------------------------
-    // Interface to GPU Compute Core Registers (0x4000_0000)
+    // Work Queue BRAM Interface for Hardware Engine
     // ---------------------------------------------------------------------
-    output wire        gpu_axi_awvalid,
-    input  wire        gpu_axi_awready,
-    output wire [31:0] gpu_axi_awaddr,
-    output wire        gpu_axi_wvalid,
-    input  wire        gpu_axi_wready,
-    output wire [31:0] gpu_axi_wdata,
-    output wire [ 3:0] gpu_axi_wstrb,
-    input  wire        gpu_axi_bvalid,
-    output wire        gpu_axi_bready,
-
-    output wire        gpu_axi_arvalid,
-    input  wire        gpu_axi_arready,
-    output wire [31:0] gpu_axi_araddr,
-    input  wire        gpu_axi_rvalid,
-    output wire        gpu_axi_rready,
-    input  wire [31:0] gpu_axi_rdata,
+    input  wire [13:0] wq_bram_addr,
+    input  wire        wq_bram_en,
+    output wire [31:0] wq_bram_dout,
+    output reg         hw_trigger,
 
     output wire        trap_out
 );
@@ -61,7 +34,7 @@ module riscv_cp_system (
             doorbell_irq_reg <= 1'b0;
         end else begin
             // Trigger IRQ pulse when Host writes to Mailbox Doorbell Address 0x3F00
-            doorbell_irq_reg <= s_axi_wvalid && s_axi_wready && (s_axi_awaddr[13:0] == 14'h3F00);
+            doorbell_irq_reg <= s_axi.awvalid && s_axi.wvalid && s_axi.awready && (s_axi.awaddr[13:0] == 14'h3F00);
         end
     end
 
@@ -129,49 +102,80 @@ module riscv_cp_system (
     );
 
     // ---------------------------------------------------------------------
-    // RISC-V Memory Decoder (Port A: 0x0000_xxxx BRAM, 0x4000_xxxx GPU Regs)
+    // RISC-V Memory Decoder
+    // 0x0000_xxxx : Mailbox BRAM (16KB)
+    // 0x1000_xxxx : Work Queue BRAM (1KB)
+    // 0x2000_xxxx : Hardware Engine Trigger Doorbell
     // ---------------------------------------------------------------------
-    wire sel_bram = (rv_araddr[31:16] == 16'h0000) || (rv_awaddr[31:16] == 16'h0000);
-    wire sel_gpu  = (rv_araddr[31:16] == 16'h4000) || (rv_awaddr[31:16] == 16'h4000);
+    wire sel_bram     = (rv_araddr[31:16] == 16'h0000) || (rv_awaddr[31:16] == 16'h0000);
+    wire sel_wq       = (rv_araddr[31:16] == 16'h1000) || (rv_awaddr[31:16] == 16'h1000);
+    wire sel_doorbell = (rv_awaddr[31:16] == 16'h2000);
 
     wire [31:0] bram_dout_a;
+    wire [31:0] wq_dout_a;
     reg         bram_rvalid_a;
     reg         bram_bvalid_a;
+    reg         wq_rvalid_a;
+    reg         wq_bvalid_a;
+    reg         doorbell_bvalid;
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            bram_rvalid_a <= 1'b0;
-            bram_bvalid_a <= 1'b0;
+            bram_rvalid_a   <= 1'b0;
+            bram_bvalid_a   <= 1'b0;
+            wq_rvalid_a     <= 1'b0;
+            wq_bvalid_a     <= 1'b0;
+            doorbell_bvalid <= 1'b0;
+            hw_trigger      <= 1'b0;
         end else begin
-            bram_rvalid_a <= rv_arvalid && sel_bram;
-            bram_bvalid_a <= rv_wvalid && sel_bram;
+            bram_rvalid_a   <= rv_arvalid && sel_bram;
+            bram_bvalid_a   <= rv_wvalid && sel_bram;
+            wq_rvalid_a     <= rv_arvalid && sel_wq;
+            wq_bvalid_a     <= rv_wvalid && sel_wq;
+            doorbell_bvalid <= rv_wvalid && sel_doorbell;
+            
+            // Generate 1-cycle pulse when writing to doorbell
+            hw_trigger      <= rv_wvalid && sel_doorbell;
         end
     end
 
     // ---------------------------------------------------------------------
     // Host PCIe AXI-Lite Slave Interface (Port B: Direct BRAM & Mailbox)
     // ---------------------------------------------------------------------
-    reg host_rvalid;
     reg host_bvalid;
+    reg host_rvalid;
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            host_rvalid <= 1'b0;
             host_bvalid <= 1'b0;
+            host_rvalid <= 1'b0;
         end else begin
-            host_rvalid <= s_axi_arvalid;
-            host_bvalid <= s_axi_wvalid;
+            // Write Response Handshake
+            if (s_axi.awvalid && s_axi.wvalid && !host_bvalid) begin
+                host_bvalid <= 1'b1;
+            end else if (s_axi.bready && host_bvalid) begin
+                host_bvalid <= 1'b0;
+            end
+
+            // Read Response Handshake
+            if (s_axi.arvalid && !host_rvalid) begin
+                host_rvalid <= 1'b1;
+            end else if (s_axi.rready && host_rvalid) begin
+                host_rvalid <= 1'b0;
+            end
         end
     end
 
-    assign s_axi_arready = 1'b1;
-    assign s_axi_awready = 1'b1;
-    assign s_axi_wready  = 1'b1;
-    assign s_axi_rvalid  = host_rvalid;
-    assign s_axi_bvalid  = host_bvalid;
+    assign s_axi.arready = ~host_rvalid;
+    assign s_axi.awready = ~host_bvalid;
+    assign s_axi.wready  = ~host_bvalid;
+    assign s_axi.rvalid  = host_rvalid;
+    assign s_axi.bvalid  = host_bvalid;
+    assign s_axi.bresp   = 2'b00; // OKAY response
+    assign s_axi.rresp   = 2'b00; // OKAY response
 
     wire [31:0] bram_dout_b;
-    assign s_axi_rdata   = bram_dout_b;
+    assign s_axi.rdata   = bram_dout_b;
 
     // ---------------------------------------------------------------------
     // Instantiate 16KB Dual-Port BRAM (Port A: RISC-V, Port B: Host PCIe)
@@ -190,32 +194,44 @@ module riscv_cp_system (
         .dout_a(bram_dout_a),
 
         // Port B: Host PCIe (XDMA Direct BRAM Mailbox)
-        .en_b(s_axi_arvalid || s_axi_wvalid),
-        .we_b(s_axi_wvalid ? s_axi_wstrb : 4'b0000),
-        .addr_b(s_axi_arvalid ? s_axi_araddr[13:0] : s_axi_awaddr[13:0]),
-        .din_b(s_axi_wdata),
+        .en_b((s_axi.arvalid && s_axi.arready) || (s_axi.awvalid && s_axi.wvalid && s_axi.awready)),
+        .we_b((s_axi.awvalid && s_axi.wvalid && s_axi.awready) ? s_axi.wstrb : 4'b0000),
+        .addr_b(s_axi.arvalid ? s_axi.araddr[13:0] : s_axi.awaddr[13:0]),
+        .din_b(s_axi.wdata),
         .dout_b(bram_dout_b)
     );
 
-    // Connect GPU AXI Slave Ports
-    assign gpu_axi_awvalid = sel_gpu ? rv_awvalid : 1'b0;
-    assign gpu_axi_awaddr  = rv_awaddr;
-    assign gpu_axi_wvalid  = sel_gpu ? rv_wvalid : 1'b0;
-    assign gpu_axi_wdata   = rv_wdata;
-    assign gpu_axi_wstrb   = rv_wstrb;
-    assign gpu_axi_bready  = sel_gpu ? rv_bready : 1'b0;
+    // ---------------------------------------------------------------------
+    // Instantiate 1KB Dual-Port BRAM (Port A: RISC-V, Port B: HW Engine)
+    // ---------------------------------------------------------------------
+    riscv_bram #(
+        .MEM_SIZE_BYTES(1024)
+    ) u_work_queue_bram (
+        .clk(clk),
+        .rst_n(rst_n),
 
-    assign gpu_axi_arvalid = sel_gpu ? rv_arvalid : 1'b0;
-    assign gpu_axi_araddr  = rv_araddr;
-    assign gpu_axi_rready  = sel_gpu ? rv_rready : 1'b0;
+        // Port A: RISC-V CPU
+        .en_a(sel_wq && (rv_arvalid || rv_wvalid)),
+        .we_a(sel_wq ? rv_wstrb : 4'b0000),
+        .addr_a(rv_arvalid ? rv_araddr[13:0] : rv_awaddr[13:0]),
+        .din_a(rv_wdata),
+        .dout_a(wq_dout_a),
 
-    // Bus Multiplexer to RISC-V Core
-    assign rv_awready = sel_gpu ? gpu_axi_awready : 1'b1;
-    assign rv_wready  = sel_gpu ? gpu_axi_wready  : 1'b1;
-    assign rv_bvalid  = sel_gpu ? gpu_axi_bvalid  : bram_bvalid_a;
+        // Port B: Hardware Engine (Read Only)
+        .en_b(wq_bram_en),
+        .we_b(4'b0000),
+        .addr_b(wq_bram_addr),
+        .din_b(32'd0),
+        .dout_b(wq_bram_dout)
+    );
 
-    assign rv_arready = sel_gpu ? gpu_axi_arready : 1'b1;
-    assign rv_rvalid  = sel_gpu ? gpu_axi_rvalid  : bram_rvalid_a;
-    assign rv_rdata   = sel_gpu ? gpu_axi_rdata   : bram_dout_a;
+    // Bus to RISC-V Core
+    assign rv_awready = 1'b1;
+    assign rv_wready  = 1'b1;
+    assign rv_bvalid  = bram_bvalid_a | wq_bvalid_a | doorbell_bvalid;
+
+    assign rv_arready = 1'b1;
+    assign rv_rvalid  = bram_rvalid_a | wq_rvalid_a;
+    assign rv_rdata   = wq_rvalid_a ? wq_dout_a : bram_dout_a;
 
 endmodule
