@@ -103,10 +103,3 @@ set_property IOSTANDARD LVCMOS33 [get_ports hdmi_scl]
 
 set_property PACKAGE_PIN G13 [get_ports hdmi_sda]
 set_property IOSTANDARD LVCMOS33 [get_ports hdmi_sda]
-
-# -------------------------------------------------------------------------
-# Asynchronous Clock Domain Crossing (CDC) Timing Constraints
-# -------------------------------------------------------------------------
-set_clock_groups -asynchronous \
-    -group [get_clocks -include_generated_clocks -of_objects [get_ports -quiet sys_clk_clk_p]] \
-    -group [get_clocks -include_generated_clocks -of_objects [get_ports -quiet hdmi_clk]]

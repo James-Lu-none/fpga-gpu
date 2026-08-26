@@ -18,10 +18,10 @@ set_property IOSTANDARD LVCMOS33 [get_ports sys_rst_n]
 set_property PULLUP true [get_ports sys_rst_n]
 
 # -------------------------------------------------------------------------
-# Prevent Vivado opt_design from trimming XDMA PCIe Hard Macro reset cells (Opt 31-67)
+# Prevent Vivado opt_design from trimming PCIe Hard Macro Primitive and reset cells (Opt 31-67)
 # -------------------------------------------------------------------------
-set_property DONT_TOUCH true [get_cells -hierarchical -filter {NAME =~ *u_xdma*}]
-
+set_property DONT_TOUCH true [get_cells -hierarchical -filter {NAME =~ *pcie*}]
+set_property DONT_TOUCH true [get_cells -hierarchical -filter {NAME =~ *xdma*}]
 
 # -------------------------------------------------------------------------
 # Configuration Voltage & SPI Flash Bitstream Options
