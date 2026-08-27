@@ -537,11 +537,19 @@ module top (
     // 6. 1GB DDR3 VRAM Memory Interface Generator Instance (mig_7series_0)
     // -------------------------------------------------------------------------
     // Buffer the 200MHz differential clock manually so it can be shared
-    wire sys_clk_200m;
+    wire sys_clk_200m_raw;
+    wire clk_ref_200m_bufg;
+    
     IBUFGDS u_ibufgds_ddr3 (
         .I  (sys_clk_p),
         .IB (sys_clk_n),
-        .O  (sys_clk_200m)
+        .O  (sys_clk_200m_raw)
+    );
+
+    // IDELAYCTRL requires its reference clock to be routed on the global clock network
+    BUFG u_bufg_clk_ref (
+        .I  (sys_clk_200m_raw),
+        .O  (clk_ref_200m_bufg)
     );
 
     mig_7series_0 u_mig_ddr3 (
@@ -562,8 +570,8 @@ module top (
         .ddr3_odt       (ddr3_odt),
 
         // System clocks & calibration
-        .sys_clk_i      (sys_clk_200m),
-        .clk_ref_i      (sys_clk_200m),
+        .sys_clk_i      (sys_clk_200m_raw),  // To MMCM/PLL (dedicated routing)
+        .clk_ref_i      (clk_ref_200m_bufg), // To IDELAYCTRL (global clock tree)
         .sys_rst        (sys_rst_n),
         .ui_clk         (ui_clk),
         .ui_clk_sync_rst(ui_clk_sync_rst),
