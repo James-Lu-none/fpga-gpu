@@ -1,0 +1,92 @@
+classDiagram
+    direction TB
+
+    class xdma_0 {
+        <<Xilinx PCIe DMA>>
+        +Clock: userclk1 (125MHz)
+        +M_AXI_LITE: BAR0 Control
+        +M_AXI: DMA Data Transfer (64-bit)
+    }
+
+    class riscv_cp_system {
+        <<Command Processor>>
+        +Mailbox_BRAM: 16KB (Host Comm)
+        +Work_Queue_BRAM: 1KB (GPU Descriptor)
+        +Doorbell: hw_trigger (Pulse)
+    }
+
+    class gpu_hardware_engine {
+        <<DMA & Control Engine>>
+        +Read BRAM Descriptor
+        +AXI4-Full Master (256-bit)
+    }
+    
+    class gpu_warp_scheduler {
+        <<Hardware Scheduler>>
+        +Dispatch Warp ID
+        +Active Mask
+    }
+
+    class sm_core {
+        <<Compute Core>>
+        +SIMD ALUs
+        +SMEM (Internal SRAM)
+    }
+
+    class axi_dwidth_converter_0 {
+        <<AXI Data Width Converter>>
+        +S: 64-bit AXI4
+        +M: 256-bit AXI4
+    }
+
+    class axi_crossbar_0 {
+        <<AXI Interconnect>>
+        +S00: DWidth Converter (256-bit)
+        +S01: GPU Hardware Engine (256-bit)
+        +M00: Clock Converter (256-bit)
+    }
+    
+    class axi_clock_converter_0 {
+        <<AXI Clock Converter (CDC)>>
+        +S: 125MHz (userclk1)
+        +M: 100MHz (ui_clk)
+    }
+
+    class mig_7series_0 {
+        <<DDR3 Memory Controller>>
+        +Clock: ui_clk (100MHz)
+        +AXI4-Full Slave (256-bit)
+    }
+
+    class framebuffer_ram {
+        <<Dual Port Video RAM>>
+        +Port A: GPU (125MHz)
+        +Port B: HDMI (Pixel Clock)
+    }
+
+    class hdmi_top {
+        <<Display Controller>>
+        +2-Stage Reset Synchronizer
+        +HDMI Timing Gen & SiI9134 I2C
+    }
+
+    %% Component Containment (Sub-modules)
+    gpu_hardware_engine *-- gpu_warp_scheduler
+    gpu_hardware_engine *-- sm_core
+
+    %% Data & Control Flow Connections
+    xdma_0 --> riscv_cp_system : 1. AXI4-Lite (Host Control / Mailbox)
+    
+    xdma_0 --> axi_dwidth_converter_0 : 2a. AXI4 64-bit (125MHz)
+    axi_dwidth_converter_0 --> axi_crossbar_0 : 2b. AXI4 256-bit (125MHz)
+    
+    riscv_cp_system --> gpu_hardware_engine : 3a. Write Task to Work Queue BRAM
+    riscv_cp_system --> gpu_hardware_engine : 3b. Fire hw_trigger (Doorbell)
+    
+    gpu_hardware_engine --> axi_crossbar_0 : 4. AXI4-Full (VRAM Fetch/Store)
+    
+    axi_crossbar_0 --> axi_clock_converter_0 : 5a. AXI4 256-bit (125MHz)
+    axi_clock_converter_0 --> mig_7series_0 : 5b. AXI4 256-bit (100MHz)
+    
+    sm_core --> framebuffer_ram : 6. Render Pixel RGB
+    framebuffer_ram --> hdmi_top : 7. Scanout to HDMI Monitor
