@@ -68,13 +68,31 @@ module hdmi_top (
     assign hdmi_clk = clk_pix;
 
     // Internal Reset for HDMI timing (synchronous to pixel clock)
-    reg clk_pix_rst_n;
+    // Source: u_xdma/inst/xdma_0_pcie2_to_pcie3_wrapper_i/pcie2_ip_i/inst/inst/user_reset_out_reg/C
+    // Dest: u_hdmi/clk_pix_rst_n_reg/CLR
+    // 
+    // [Reset Synchronizer (Reset Bridge)]
+    // Because rst_n (from PCIe userclk) and clk_pix (from MMCME2) are asynchronous to each other,
+    // directly routing rst_n to the logic clocked by clk_pix can cause timing violations (Recovery time failures)
+    // and metastability when the reset is released exactly at the clock edge.
+    // We use a 2-stage cascaded flip-flop to safely cross the reset into the clk_pix domain.
+    // The (* ASYNC_REG = "TRUE" *) attribute tells Vivado that these are synchronizer registers,
+    // ensuring they are placed very close together in the FPGA slice to minimize routing delay 
+    // and resolve metastability quickly.
+    (* ASYNC_REG = "TRUE" *) reg [1:0] clk_pix_rst_sync;
     always @(posedge clk_pix or negedge rst_n) begin
         if (!rst_n)
-            clk_pix_rst_n <= 1'b0;
+            clk_pix_rst_sync <= 2'b00; // Asynchronous assertion
         else
-            clk_pix_rst_n <= locked;
+            // after rst_n goes high, clk_pix_rst_sync:
+            // 00: Initial State
+            // 01: after first pixel clk posedge when locked (pixel clk stable)
+            // 11: after second pixel clk posedge when locked
+            // we purpose delay one more pixel clk period to release reset
+            // so it is safer, avoid metastability.
+            clk_pix_rst_sync <= {clk_pix_rst_sync[0], locked}; // Synchronous release
     end
+    wire clk_pix_rst_n = clk_pix_rst_sync[1];
 
     // -------------------------------------------------------------------------
     // Video Timing Generator
