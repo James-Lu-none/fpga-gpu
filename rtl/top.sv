@@ -355,7 +355,7 @@ module top (
         .s_axi_awcache  ({conv_m_axi.awcache, core_m_axi.awcache}),
         .s_axi_awprot   ({conv_m_axi.awprot, core_m_axi.awprot}),
         .s_axi_awqos    ({conv_m_axi.awqos, core_m_axi.awqos}),
-        .s_axi_awregion ({conv_m_axi.awregion, core_m_axi.awregion}),
+        // .s_axi_awregion ({conv_m_axi.awregion, core_m_axi.awregion}), // region is omitted in crossbar
         .s_axi_awvalid  ({conv_m_axi.awvalid, core_m_axi.awvalid}),
         .s_axi_awready  (xbar_s_awready),
 
@@ -379,7 +379,7 @@ module top (
         .s_axi_arcache  ({conv_m_axi.arcache, core_m_axi.arcache}),
         .s_axi_arprot   ({conv_m_axi.arprot, core_m_axi.arprot}),
         .s_axi_arqos    ({conv_m_axi.arqos, core_m_axi.arqos}),
-        .s_axi_arregion ({conv_m_axi.arregion, core_m_axi.arregion}),
+        // .s_axi_arregion ({conv_m_axi.arregion, core_m_axi.arregion}), // region is omitted in crossbar
         .s_axi_arvalid  ({conv_m_axi.arvalid, core_m_axi.arvalid}),
         .s_axi_arready  (xbar_s_arready),
 
