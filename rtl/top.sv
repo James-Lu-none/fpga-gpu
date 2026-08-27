@@ -202,8 +202,8 @@ module top (
         .m_axi_awlock    (xdma_m_axi.awlock),
         .m_axi_awcache   (xdma_m_axi.awcache),
         .m_axi_awprot    (xdma_m_axi.awprot),
-        .m_axi_awqos     (xdma_m_axi.awqos),
-        .m_axi_awregion  (xdma_m_axi.awregion),
+        // .m_axi_awqos     (xdma_m_axi.awqos),
+        // .m_axi_awregion  (xdma_m_axi.awregion),
         .m_axi_awvalid   (xdma_m_axi.awvalid),
         .m_axi_awready   (xdma_m_axi.awready),
         .m_axi_wdata     (xdma_m_axi.wdata),
@@ -223,8 +223,8 @@ module top (
         .m_axi_arlock    (xdma_m_axi.arlock),
         .m_axi_arcache   (xdma_m_axi.arcache),
         .m_axi_arprot    (xdma_m_axi.arprot),
-        .m_axi_arqos     (xdma_m_axi.arqos),
-        .m_axi_arregion  (xdma_m_axi.arregion),
+        // .m_axi_arqos     (xdma_m_axi.arqos),
+        // .m_axi_arregion  (xdma_m_axi.arregion),
         .m_axi_arvalid   (xdma_m_axi.arvalid),
         .m_axi_arready   (xdma_m_axi.arready),
         .m_axi_rid       (xdma_m_axi.rid),
@@ -263,8 +263,8 @@ module top (
         .s_axi_awlock   (xdma_m_axi.awlock),
         .s_axi_awcache  (xdma_m_axi.awcache),
         .s_axi_awprot   (xdma_m_axi.awprot),
-        .s_axi_awqos    (xdma_m_axi.awqos),
-        .s_axi_awregion (xdma_m_axi.awregion),
+        .s_axi_awqos    (4'b0), // xdma does not support QoS
+        .s_axi_awregion (4'b0), // xdma does not support region
         .s_axi_awvalid  (xdma_m_axi.awvalid),
         .s_axi_awready  (xdma_m_axi.awready),
         .s_axi_wdata    (xdma_m_axi.wdata),
@@ -284,8 +284,8 @@ module top (
         .s_axi_arlock   (xdma_m_axi.arlock),
         .s_axi_arcache  (xdma_m_axi.arcache),
         .s_axi_arprot   (xdma_m_axi.arprot),
-        .s_axi_arqos    (xdma_m_axi.arqos),
-        .s_axi_arregion (xdma_m_axi.arregion),
+        .s_axi_arqos    (4'b0), // xdma does not support QoS
+        .s_axi_arregion (4'b0), // xdma does not support region
         .s_axi_arvalid  (xdma_m_axi.arvalid),
         .s_axi_arready  (xdma_m_axi.arready),
         .s_axi_rid      (xdma_m_axi.rid),
