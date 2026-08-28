@@ -628,11 +628,8 @@ module top (
     // -------------------------------------------------------------------------
     wire        cp_trap;
     
-    // Hardware Engine Work Queue & Trigger Wires
-    wire [13:0] wq_bram_addr;
-    wire        wq_bram_en;
-    wire [31:0] wq_bram_dout;
-    wire        hw_trigger;
+    // Hardware Engine AXI-Lite Interface
+    axi_lite_if #(.ADDR_W(32), .DATA_W(32)) cp_to_gpu_axil();
 
     riscv_cp_system u_riscv_cp (
         .clk                    (axi_aclk),
@@ -641,11 +638,8 @@ module top (
         // PCIe XDMA BAR0 AXI-Lite Slave Interface
         .s_axi                  (xdma_axil),
 
-        // Work Queue BRAM Interface for Hardware Engine
-        .wq_bram_addr           (wq_bram_addr),
-        .wq_bram_en             (wq_bram_en),
-        .wq_bram_dout           (wq_bram_dout),
-        .hw_trigger             (hw_trigger),
+        // GPU Hardware Engine AXI-Lite Master Interface
+        .m_axi_lite             (cp_to_gpu_axil),
 
         .trap_out               (cp_trap)
     );
@@ -692,19 +686,15 @@ module top (
         .clk                    (axi_aclk),
         .rst_n                  (axi_aresetn),
         
-        .hw_trigger             (hw_trigger),
-        .wq_bram_addr           (wq_bram_addr),
-        .wq_bram_en             (wq_bram_en),
-        .wq_bram_dout           (wq_bram_dout),
+        // AXI4-Lite Slave Interface (From RISC-V)
+        .s_axi_lite             (cp_to_gpu_axil),
         
-        .grid_done              (grid_done),
-
-        // 256-bit AXI4-Full Master Interface (Direct to Crossbar S01)
-        .m_axi_gmem             (core_m_axi),
-
         .fb_we                  (fb_we),
         .fb_addr                (fb_addr),
-        .fb_rgb                 (fb_rgb)
+        .fb_rgb                 (fb_rgb),
+        
+        // 256-bit AXI4-Full Master Interface (Direct to Crossbar S01)
+        .m_axi_gmem             (core_m_axi)
     );
 
 endmodule
