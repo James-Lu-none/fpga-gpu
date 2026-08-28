@@ -87,11 +87,8 @@ module top (
     (* keep = "true" *) wire user_lnk_up;
 
     // Interrupt Signals
-    wire grid_done;
     wire usr_irq_req;
     wire usr_irq_ack;
-
-    assign usr_irq_req = grid_done;
 
     // -------------------------------------------------------------------------
     // 2. AXI Bus Interfaces
@@ -624,24 +621,18 @@ module top (
     );
 
     // -------------------------------------------------------------------------
-    // 7. RISC-V Command Processor (CP) SoC Instance (PicoRV32 + 16KB Mailbox 0x3F00)
+    // 7. GPU Top Module (RISC-V CP + GPC + SMs)
     // -------------------------------------------------------------------------
-    wire        cp_trap;
-    
-    // Hardware Engine AXI-Lite Interface
-    axi_lite_if #(.ADDR_W(32), .DATA_W(32)) rv_gpu_axil();
-
-    riscv_cp_system u_riscv_cp (
+    gpu_top u_gpu_top (
         .clk                    (axi_aclk),
         .rst_n                  (axi_aresetn),
-
-        // PCIe XDMA BAR0 AXI-Lite Slave Interface
-        .s_axi                  (xdma_rv_axil),
-
-        // GPU Hardware Engine AXI-Lite Master Interface
-        .m_axi_lite             (rv_gpu_axil),
-
-        .trap_out               (cp_trap)
+        .s_axi_lite             (xdma_rv_axil),
+        .m_axi_gmem             (gpu_xbar_axi),
+        .fb_we                  (fb_we),
+        .fb_addr                (fb_addr),
+        .fb_rgb                 (fb_rgb),
+        .usr_irq_req            (usr_irq_req),
+        .usr_irq_ack            (usr_irq_ack)
     );
 
     // -------------------------------------------------------------------------
@@ -677,24 +668,6 @@ module top (
         .hdmi_scl              (hdmi_scl),
         .hdmi_sda              (hdmi_sda),
         .hdmi_init_done        (hdmi_init_done)
-    );
-
-    // -------------------------------------------------------------------------
-    // 9. Hardware Engine (Command Fetch + DMA + SM Dispatch)
-    // -------------------------------------------------------------------------
-    gpu_hardware_engine u_hw_engine (
-        .clk                    (axi_aclk),
-        .rst_n                  (axi_aresetn),
-        
-        // AXI4-Lite Slave Interface (From RISC-V)
-        .s_axi_lite             (rv_gpu_axil),
-        
-        .fb_we                  (fb_we),
-        .fb_addr                (fb_addr),
-        .fb_rgb                 (fb_rgb),
-        
-        // 256-bit AXI4-Full Master Interface (Direct to Crossbar S01)
-        .m_axi_gmem             (gpu_xbar_axi)
     );
 
 endmodule

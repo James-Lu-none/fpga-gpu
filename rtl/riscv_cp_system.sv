@@ -5,12 +5,14 @@
 
 `timescale 1ns / 1ps
 
+`include "gpu_memory_map.vh"
+
 module riscv_cp_system (
     input  wire        clk,
     input  wire        rst_n,
 
     axi_lite_if.slave  s_axi, // PCIe Host Interface
-    axi_lite_if.master m_axi_lite, // To GPU hardware engine register
+    axi_lite_if.master m_axi_lite, // To GPU SM register
 
     output wire        trap_out
 );
@@ -25,17 +27,17 @@ module riscv_cp_system (
         if (!rst_n) begin
             doorbell_irq_reg <= 1'b0;
         end else begin
-            // Trigger IRQ pulse when Host writes to Mailbox Doorbell Address 0x3F00
-            doorbell_irq_reg <= s_axi.awvalid && s_axi.wvalid && s_axi.awready && (s_axi.awaddr[13:0] == 14'h3F00);
+            // Trigger IRQ pulse when Host writes to Mailbox Doorbell Address
+            doorbell_irq_reg <= s_axi.awvalid && s_axi.wvalid && s_axi.awready && (s_axi.awaddr[13:0] == `BRAM_MAILBOX_BASE[13:0]);
         end
     end
     
     picorv32_axi #(
         .ENABLE_IRQ(1),
         .ENABLE_IRQ_QREGS(1),
-        .PROGADDR_RESET(32'h0000_0000),
-        .PROGADDR_IRQ(32'h0000_0010),
-        .STACKADDR(32'h0000_3E00)
+        .PROGADDR_RESET(`BRAM_PROGADDR_RESET),
+        .PROGADDR_IRQ(`BRAM_PROGADDR_IRQ),
+        .STACKADDR(`BRAM_STACKADDR)
     ) u_picorv32 (
         .clk(clk),
         .resetn(rst_n),
@@ -83,15 +85,15 @@ module riscv_cp_system (
     // ---------------------------------------------------------------------
 
     axi_lite_1to2_decoder #(
-        .ADDR_BASE_0(16'h0000),
-        .ADDR_BASE_1(16'h1000),
+        .ADDR_BASE_0(`ADDR_BASE_BRAM),
+        .ADDR_BASE_1(`ADDR_BASE_GPC),
         .REGISTER_RESPONSES(1)
     ) u_decoder (
         .clk(clk),
         .rst_n(rst_n),
         .s_axi(rv_axi), // From RISC-V mem master
         .m0_axi(bram_axi), // To BRAM for CPU mem access
-        .m1_axi(m_axi_lite) // To GPU hardware engine register
+        .m1_axi(m_axi_lite) // To GPU SM register
     );
 
     // BRAM Interface Adapter (0-cycle pseudo slave)

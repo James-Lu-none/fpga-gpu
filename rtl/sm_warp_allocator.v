@@ -15,7 +15,7 @@
 //   Manages Active Warp States, Issue Logic, and Thread Active Masks.
 ////////////////////////////////////////////////////////////////////////////////--
 
-module gpu_warp_scheduler #(
+module sm_warp_allocator #(
     parameter integer WARP_SIZE = 32
 )(
     input  wire        clk,

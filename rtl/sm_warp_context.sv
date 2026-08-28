@@ -1,0 +1,141 @@
+`timescale 1ns / 1ps
+////////////////////////////////////////////////////////////////////////////////--
+// Streaming Multiprocessor (SM) - Warp Context & Scheduler
+// Maintains the state (Context RAM) of resident warps and dynamically schedules
+// READY warps to the instruction fetch stage.
+////////////////////////////////////////////////////////////////////////////////--
+
+module sm_warp_context #(
+    parameter MAX_WARPS = 16
+)(
+    input  wire        clk,
+    input  wire        rst_n,
+
+    // -------------------------------------------------------------------------
+    // Allocation Interface (From GPU Top Scheduler)
+    // -------------------------------------------------------------------------
+    output wire        alloc_ready,       // High if there is at least one FREE slot
+    input  wire        alloc_valid,       // Allocate a new warp
+    input  wire [15:0] alloc_block_id,    // Which block this warp belongs to
+    input  wire [31:0] alloc_active_mask, // Initial active threads
+
+    // -------------------------------------------------------------------------
+    // Issue Interface (To Fetch/Decode Stage)
+    // -------------------------------------------------------------------------
+    output reg         issue_valid,
+    output reg  [3:0]  issue_warp_id,
+    output reg  [11:0] issue_pc,          // Program Counter
+    output reg  [31:0] issue_active_mask,
+    
+    // -------------------------------------------------------------------------
+    // Feedback Interface (From Execution Pipeline)
+    // -------------------------------------------------------------------------
+    input  wire        wb_valid,          // Write-back valid from pipeline
+    input  wire [3:0]  wb_warp_id,        // Which warp just completed an instruction
+    input  wire [11:0] wb_next_pc,        // Next PC (could be PC+1 or branch)
+    input  wire        wb_is_done         // High if warp reached EXIT opcode
+);
+
+    // Warp States
+    localparam STATE_FREE  = 2'd0;
+    localparam STATE_READY = 2'd1;
+    localparam STATE_STALL = 2'd2; // E.g., waiting for memory (for future use)
+    localparam STATE_DONE  = 2'd3;
+
+    // Context RAM Arrays
+    reg [1:0]  warp_state      [0:MAX_WARPS-1];
+    reg [11:0] warp_pc         [0:MAX_WARPS-1];
+    reg [31:0] warp_mask       [0:MAX_WARPS-1];
+    reg [15:0] warp_block_id   [0:MAX_WARPS-1];
+
+    // Find the first FREE warp slot
+    reg [3:0] free_warp_idx;
+    reg       has_free_warp;
+    integer i;
+
+    always @(*) begin
+        has_free_warp = 1'b0;
+        free_warp_idx = 4'd0;
+        for (i = MAX_WARPS-1; i >= 0; i = i - 1) begin
+            if (warp_state[i] == STATE_FREE || warp_state[i] == STATE_DONE) begin
+                has_free_warp = 1'b1;
+                free_warp_idx = i;
+            end
+        end
+    end
+
+    assign alloc_ready = has_free_warp;
+
+    // Round-Robin Scheduler State
+    reg [3:0] rr_idx;
+
+    // Main Context Update & Scheduler Block
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            rr_idx <= 4'd0;
+            issue_valid <= 1'b0;
+            issue_warp_id <= 4'd0;
+            issue_pc <= 12'd0;
+            issue_active_mask <= 32'd0;
+            
+            for (integer j = 0; j < MAX_WARPS; j = j + 1) begin
+                warp_state[j] <= STATE_FREE;
+            end
+        end else begin
+            // 1. Handle Warp Allocation
+            if (alloc_valid && has_free_warp) begin
+                warp_state[free_warp_idx]    <= STATE_READY;
+                warp_pc[free_warp_idx]       <= 12'd0; // Reset PC to 0
+                warp_mask[free_warp_idx]     <= alloc_active_mask;
+                warp_block_id[free_warp_idx] <= alloc_block_id;
+            end
+
+            // 2. Handle Feedback (Instruction Complete / Exit)
+            // Note: If alloc and wb target the same warp, this simple logic favors wb.
+            // But a new allocation will target a FREE warp, while wb targets an active warp, 
+            // so they won't collide.
+            if (wb_valid) begin
+                if (wb_is_done) begin
+                    warp_state[wb_warp_id] <= STATE_DONE;
+                end else begin
+                    warp_pc[wb_warp_id]    <= wb_next_pc;
+                    warp_state[wb_warp_id] <= STATE_READY;
+                end
+            end
+
+            // 3. Dynamic Scheduler (Round-Robin)
+            // Look for a READY warp starting from rr_idx
+            // Simplified combinational scan for 16 warps
+            begin : rr_scheduler
+                reg [3:0] next_idx;
+                reg found;
+                found = 1'b0;
+                next_idx = rr_idx;
+                
+                for (integer k = 0; k < MAX_WARPS; k = k + 1) begin
+                    if (!found && warp_state[(rr_idx + k) % MAX_WARPS] == STATE_READY) begin
+                        found = 1'b1;
+                        next_idx = (rr_idx + k) % MAX_WARPS;
+                    end
+                end
+    
+                if (found) begin
+                    // A warp is ready to issue!
+                    issue_valid       <= 1'b1;
+                    issue_warp_id     <= next_idx;
+                    issue_pc          <= warp_pc[next_idx];
+                    issue_active_mask <= warp_mask[next_idx];
+                    
+                    // Set state to STALL so we don't issue it again until it writes back
+                    warp_state[next_idx] <= STATE_STALL;
+                    
+                    // Move Round-Robin index to next warp
+                    rr_idx <= (next_idx + 1) % MAX_WARPS;
+                end else begin
+                    issue_valid <= 1'b0;
+                end
+            end
+        end
+    end
+
+endmodule
