@@ -5,7 +5,7 @@
 
 `timescale 1ns / 1ps
 
-`include "gpu_memory_map.vh"
+`include "address.vh"
 
 module riscv_cp_system (
     input  wire        clk,
@@ -28,7 +28,7 @@ module riscv_cp_system (
             doorbell_irq_reg <= 1'b0;
         end else begin
             // Trigger IRQ pulse when Host writes to Mailbox Doorbell Address
-            doorbell_irq_reg <= s_axi.awvalid && s_axi.wvalid && s_axi.awready && (s_axi.awaddr[13:0] == `BRAM_MAILBOX_BASE[13:0]);
+            doorbell_irq_reg <= s_axi.awvalid && s_axi.wvalid && s_axi.awready && (s_axi.awaddr == `BRAM_MAILBOX_BASE);
         end
     end
     
