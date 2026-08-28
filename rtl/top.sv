@@ -96,12 +96,12 @@ module top (
     // -------------------------------------------------------------------------
     // 2. AXI Bus Interfaces
     // -------------------------------------------------------------------------
-    axi_lite_if #(.ADDR_W(32), .DATA_W(32))   xdma_axil();
-    axi4_if     #(.ADDR_W(65), .DATA_W(64), .ID_W(4))   xdma_m_axi();
-    axi4_if     #(.ADDR_W(32), .DATA_W(256), .ID_W(1))  conv_m_axi();
-    axi4_if     #(.ADDR_W(32), .DATA_W(256), .ID_W(1))  core_m_axi();
-    axi4_if     #(.ADDR_W(32), .DATA_W(256), .ID_W(2))  xbar_m_axi();
-    axi4_if     #(.ADDR_W(32), .DATA_W(256), .ID_W(2))  mig_m_axi();
+    axi_lite_if #(.ADDR_W(32), .DATA_W(32))   xdma_rv_axil();
+    axi4_if     #(.ADDR_W(64), .DATA_W(64), .ID_W(4))   xdma_dwconv_axi();
+    axi4_if     #(.ADDR_W(32), .DATA_W(256), .ID_W(1))  dwconv_xbar_axi();
+    axi4_if     #(.ADDR_W(32), .DATA_W(256), .ID_W(1))  gpu_xbar_axi();
+    axi4_if     #(.ADDR_W(32), .DATA_W(256), .ID_W(2))  xbar_cdc_axi();
+    axi4_if     #(.ADDR_W(32), .DATA_W(256), .ID_W(2))  cdc_mig_axi();
 
 
     // Crossbar 2-Slave Response Signal Demux Vectors
@@ -119,36 +119,36 @@ module top (
     wire [1:0]   xbar_s_rlast;
 
     // S00 = GPU Core (ID=1), S01 = XDMA (ID=4)
-    assign core_m_axi.awready = xbar_s_awready[0];
-    assign conv_m_axi.awready = xbar_s_awready[1];
-    assign core_m_axi.wready  = xbar_s_wready[0];
-    assign conv_m_axi.wready  = xbar_s_wready[1];
-    assign core_m_axi.bvalid  = xbar_s_bvalid[0];
-    assign conv_m_axi.bvalid  = xbar_s_bvalid[1];
-    assign core_m_axi.arready = xbar_s_arready[0];
-    assign conv_m_axi.arready = xbar_s_arready[1];
-    assign core_m_axi.rvalid  = xbar_s_rvalid[0];
-    assign conv_m_axi.rvalid  = xbar_s_rvalid[1];
+    assign gpu_xbar_axi.awready = xbar_s_awready[0];
+    assign dwconv_xbar_axi.awready = xbar_s_awready[1];
+    assign gpu_xbar_axi.wready  = xbar_s_wready[0];
+    assign dwconv_xbar_axi.wready  = xbar_s_wready[1];
+    assign gpu_xbar_axi.bvalid  = xbar_s_bvalid[0];
+    assign dwconv_xbar_axi.bvalid  = xbar_s_bvalid[1];
+    assign gpu_xbar_axi.arready = xbar_s_arready[0];
+    assign dwconv_xbar_axi.arready = xbar_s_arready[1];
+    assign gpu_xbar_axi.rvalid  = xbar_s_rvalid[0];
+    assign dwconv_xbar_axi.rvalid  = xbar_s_rvalid[1];
 
-    assign core_m_axi.rdata   = xbar_s_rdata[255:0];
-    assign conv_m_axi.rdata   = xbar_s_rdata[511:256];
+    assign gpu_xbar_axi.rdata   = xbar_s_rdata[255:0];
+    assign dwconv_xbar_axi.rdata   = xbar_s_rdata[511:256];
     
     // Crossbar packs [1:1] for S01 (1-bit) and [0:0] for S00 (1-bit)
-    assign core_m_axi.bid     = xbar_s_bid[0];
-    assign conv_m_axi.bid     = xbar_s_bid[1];
-    assign core_m_axi.bresp   = xbar_s_bresp[1:0];
-    assign conv_m_axi.bresp   = xbar_s_bresp[3:2];
+    assign gpu_xbar_axi.bid     = xbar_s_bid[0];
+    assign dwconv_xbar_axi.bid     = xbar_s_bid[1];
+    assign gpu_xbar_axi.bresp   = xbar_s_bresp[1:0];
+    assign dwconv_xbar_axi.bresp   = xbar_s_bresp[3:2];
     
-    assign core_m_axi.rid     = xbar_s_rid[0];
-    assign conv_m_axi.rid     = xbar_s_rid[1];
-    assign core_m_axi.rresp   = xbar_s_rresp[1:0];
-    assign conv_m_axi.rresp   = xbar_s_rresp[3:2];
-    assign core_m_axi.rlast   = xbar_s_rlast[0];
-    assign conv_m_axi.rlast   = xbar_s_rlast[1];
+    assign gpu_xbar_axi.rid     = xbar_s_rid[0];
+    assign dwconv_xbar_axi.rid     = xbar_s_rid[1];
+    assign gpu_xbar_axi.rresp   = xbar_s_rresp[1:0];
+    assign dwconv_xbar_axi.rresp   = xbar_s_rresp[3:2];
+    assign gpu_xbar_axi.rlast   = xbar_s_rlast[0];
+    assign dwconv_xbar_axi.rlast   = xbar_s_rlast[1];
 
     // Tie off floating ID inputs for S01 since dwidth_converter dropped them
-    assign conv_m_axi.awid    = 1'b0;
-    assign conv_m_axi.arid    = 1'b0;
+    assign dwconv_xbar_axi.awid    = 1'b0;
+    assign dwconv_xbar_axi.arid    = 1'b0;
 
     // -------------------------------------------------------------------------
     // 3. PCIe XDMA Subsystem IP Instance (xdma_0)
@@ -173,66 +173,66 @@ module top (
         .msi_vector_width(),
 
         // BAR0 AXI4-Lite Control Bus (Mailbox 0x3F00)
-        .m_axil_awaddr   (xdma_axil.awaddr),
-        .m_axil_awprot   (xdma_axil.awprot),
-        .m_axil_awvalid  (xdma_axil.awvalid),
-        .m_axil_awready  (xdma_axil.awready),
-        .m_axil_wdata    (xdma_axil.wdata),
-        .m_axil_wstrb    (xdma_axil.wstrb),
-        .m_axil_wvalid   (xdma_axil.wvalid),
-        .m_axil_wready   (xdma_axil.wready),
-        .m_axil_bresp    (xdma_axil.bresp),
-        .m_axil_bvalid   (xdma_axil.bvalid),
-        .m_axil_bready   (xdma_axil.bready),
-        .m_axil_araddr   (xdma_axil.araddr),
-        .m_axil_arprot   (xdma_axil.arprot),
-        .m_axil_arvalid  (xdma_axil.arvalid),
-        .m_axil_arready  (xdma_axil.arready),
-        .m_axil_rdata    (xdma_axil.rdata),
-        .m_axil_rresp    (xdma_axil.rresp),
-        .m_axil_rvalid   (xdma_axil.rvalid),
-        .m_axil_rready   (xdma_axil.rready),
+        .m_axil_awaddr   (xdma_rv_axil.awaddr),
+        .m_axil_awprot   (xdma_rv_axil.awprot),
+        .m_axil_awvalid  (xdma_rv_axil.awvalid),
+        .m_axil_awready  (xdma_rv_axil.awready),
+        .m_axil_wdata    (xdma_rv_axil.wdata),
+        .m_axil_wstrb    (xdma_rv_axil.wstrb),
+        .m_axil_wvalid   (xdma_rv_axil.wvalid),
+        .m_axil_wready   (xdma_rv_axil.wready),
+        .m_axil_bresp    (xdma_rv_axil.bresp),
+        .m_axil_bvalid   (xdma_rv_axil.bvalid),
+        .m_axil_bready   (xdma_rv_axil.bready),
+        .m_axil_araddr   (xdma_rv_axil.araddr),
+        .m_axil_arprot   (xdma_rv_axil.arprot),
+        .m_axil_arvalid  (xdma_rv_axil.arvalid),
+        .m_axil_arready  (xdma_rv_axil.arready),
+        .m_axil_rdata    (xdma_rv_axil.rdata),
+        .m_axil_rresp    (xdma_rv_axil.rresp),
+        .m_axil_rvalid   (xdma_rv_axil.rvalid),
+        .m_axil_rready   (xdma_rv_axil.rready),
 
         // 64-bit AXI4-Full Master DMA Bus
-        .m_axi_awid      (xdma_m_axi.awid),
-        .m_axi_awaddr    (xdma_m_axi.awaddr),
-        .m_axi_awlen     (xdma_m_axi.awlen),
-        .m_axi_awsize    (xdma_m_axi.awsize),
-        .m_axi_awburst   (xdma_m_axi.awburst),
-        .m_axi_awlock    (xdma_m_axi.awlock),
-        .m_axi_awcache   (xdma_m_axi.awcache),
-        .m_axi_awprot    (xdma_m_axi.awprot),
-        // .m_axi_awqos     (xdma_m_axi.awqos),
-        // .m_axi_awregion  (xdma_m_axi.awregion),
-        .m_axi_awvalid   (xdma_m_axi.awvalid),
-        .m_axi_awready   (xdma_m_axi.awready),
-        .m_axi_wdata     (xdma_m_axi.wdata),
-        .m_axi_wstrb     (xdma_m_axi.wstrb),
-        .m_axi_wlast     (xdma_m_axi.wlast),
-        .m_axi_wvalid    (xdma_m_axi.wvalid),
-        .m_axi_wready    (xdma_m_axi.wready),
-        .m_axi_bid       (xdma_m_axi.bid),
-        .m_axi_bresp     (xdma_m_axi.bresp),
-        .m_axi_bvalid    (xdma_m_axi.bvalid),
-        .m_axi_bready    (xdma_m_axi.bready),
-        .m_axi_arid      (xdma_m_axi.arid),
-        .m_axi_araddr    (xdma_m_axi.araddr),
-        .m_axi_arlen     (xdma_m_axi.arlen),
-        .m_axi_arsize    (xdma_m_axi.arsize),
-        .m_axi_arburst   (xdma_m_axi.arburst),
-        .m_axi_arlock    (xdma_m_axi.arlock),
-        .m_axi_arcache   (xdma_m_axi.arcache),
-        .m_axi_arprot    (xdma_m_axi.arprot),
-        // .m_axi_arqos     (xdma_m_axi.arqos),
-        // .m_axi_arregion  (xdma_m_axi.arregion),
-        .m_axi_arvalid   (xdma_m_axi.arvalid),
-        .m_axi_arready   (xdma_m_axi.arready),
-        .m_axi_rid       (xdma_m_axi.rid),
-        .m_axi_rdata     (xdma_m_axi.rdata),
-        .m_axi_rresp     (xdma_m_axi.rresp),
-        .m_axi_rlast     (xdma_m_axi.rlast),
-        .m_axi_rvalid    (xdma_m_axi.rvalid),
-        .m_axi_rready    (xdma_m_axi.rready),
+        .m_axi_awid      (xdma_dwconv_axi.awid),
+        .m_axi_awaddr    (xdma_dwconv_axi.awaddr),
+        .m_axi_awlen     (xdma_dwconv_axi.awlen),
+        .m_axi_awsize    (xdma_dwconv_axi.awsize),
+        .m_axi_awburst   (xdma_dwconv_axi.awburst),
+        .m_axi_awlock    (xdma_dwconv_axi.awlock),
+        .m_axi_awcache   (xdma_dwconv_axi.awcache),
+        .m_axi_awprot    (xdma_dwconv_axi.awprot),
+        // .m_axi_awqos     (xdma_dwconv_axi.awqos),
+        // .m_axi_awregion  (xdma_dwconv_axi.awregion),
+        .m_axi_awvalid   (xdma_dwconv_axi.awvalid),
+        .m_axi_awready   (xdma_dwconv_axi.awready),
+        .m_axi_wdata     (xdma_dwconv_axi.wdata),
+        .m_axi_wstrb     (xdma_dwconv_axi.wstrb),
+        .m_axi_wlast     (xdma_dwconv_axi.wlast),
+        .m_axi_wvalid    (xdma_dwconv_axi.wvalid),
+        .m_axi_wready    (xdma_dwconv_axi.wready),
+        .m_axi_bid       (xdma_dwconv_axi.bid),
+        .m_axi_bresp     (xdma_dwconv_axi.bresp),
+        .m_axi_bvalid    (xdma_dwconv_axi.bvalid),
+        .m_axi_bready    (xdma_dwconv_axi.bready),
+        .m_axi_arid      (xdma_dwconv_axi.arid),
+        .m_axi_araddr    (xdma_dwconv_axi.araddr),
+        .m_axi_arlen     (xdma_dwconv_axi.arlen),
+        .m_axi_arsize    (xdma_dwconv_axi.arsize),
+        .m_axi_arburst   (xdma_dwconv_axi.arburst),
+        .m_axi_arlock    (xdma_dwconv_axi.arlock),
+        .m_axi_arcache   (xdma_dwconv_axi.arcache),
+        .m_axi_arprot    (xdma_dwconv_axi.arprot),
+        // .m_axi_arqos     (xdma_dwconv_axi.arqos),
+        // .m_axi_arregion  (xdma_dwconv_axi.arregion),
+        .m_axi_arvalid   (xdma_dwconv_axi.arvalid),
+        .m_axi_arready   (xdma_dwconv_axi.arready),
+        .m_axi_rid       (xdma_dwconv_axi.rid),
+        .m_axi_rdata     (xdma_dwconv_axi.rdata),
+        .m_axi_rresp     (xdma_dwconv_axi.rresp),
+        .m_axi_rlast     (xdma_dwconv_axi.rlast),
+        .m_axi_rvalid    (xdma_dwconv_axi.rvalid),
+        .m_axi_rready    (xdma_dwconv_axi.rready),
 
         // Tie off unused Configuration Management Interface
         .cfg_mgmt_addr   (19'b0),
@@ -255,88 +255,88 @@ module top (
         .s_axi_aresetn  (axi_aresetn),
 
         // 64-bit Slave Interface from XDMA
-        .s_axi_awid     (xdma_m_axi.awid),
-        .s_axi_awaddr   (xdma_m_axi.awaddr[31:0]),
-        .s_axi_awlen    (xdma_m_axi.awlen),
-        .s_axi_awsize   (xdma_m_axi.awsize),
-        .s_axi_awburst  (xdma_m_axi.awburst),
-        .s_axi_awlock   (xdma_m_axi.awlock),
-        .s_axi_awcache  (xdma_m_axi.awcache),
-        .s_axi_awprot   (xdma_m_axi.awprot),
+        .s_axi_awid     (xdma_dwconv_axi.awid),
+        .s_axi_awaddr   (xdma_dwconv_axi.awaddr[31:0]),
+        .s_axi_awlen    (xdma_dwconv_axi.awlen),
+        .s_axi_awsize   (xdma_dwconv_axi.awsize),
+        .s_axi_awburst  (xdma_dwconv_axi.awburst),
+        .s_axi_awlock   (xdma_dwconv_axi.awlock),
+        .s_axi_awcache  (xdma_dwconv_axi.awcache),
+        .s_axi_awprot   (xdma_dwconv_axi.awprot),
         .s_axi_awqos    (4'b0), // xdma does not support QoS
         .s_axi_awregion (4'b0), // xdma does not support region
-        .s_axi_awvalid  (xdma_m_axi.awvalid),
-        .s_axi_awready  (xdma_m_axi.awready),
-        .s_axi_wdata    (xdma_m_axi.wdata),
-        .s_axi_wstrb    (xdma_m_axi.wstrb),
-        .s_axi_wlast    (xdma_m_axi.wlast),
-        .s_axi_wvalid   (xdma_m_axi.wvalid),
-        .s_axi_wready   (xdma_m_axi.wready),
-        .s_axi_bid      (xdma_m_axi.bid),
-        .s_axi_bresp    (xdma_m_axi.bresp),
-        .s_axi_bvalid   (xdma_m_axi.bvalid),
-        .s_axi_bready   (xdma_m_axi.bready),
-        .s_axi_arid     (xdma_m_axi.arid),
-        .s_axi_araddr   (xdma_m_axi.araddr[31:0]),
-        .s_axi_arlen    (xdma_m_axi.arlen),
-        .s_axi_arsize   (xdma_m_axi.arsize),
-        .s_axi_arburst  (xdma_m_axi.arburst),
-        .s_axi_arlock   (xdma_m_axi.arlock),
-        .s_axi_arcache  (xdma_m_axi.arcache),
-        .s_axi_arprot   (xdma_m_axi.arprot),
+        .s_axi_awvalid  (xdma_dwconv_axi.awvalid),
+        .s_axi_awready  (xdma_dwconv_axi.awready),
+        .s_axi_wdata    (xdma_dwconv_axi.wdata),
+        .s_axi_wstrb    (xdma_dwconv_axi.wstrb),
+        .s_axi_wlast    (xdma_dwconv_axi.wlast),
+        .s_axi_wvalid   (xdma_dwconv_axi.wvalid),
+        .s_axi_wready   (xdma_dwconv_axi.wready),
+        .s_axi_bid      (xdma_dwconv_axi.bid),
+        .s_axi_bresp    (xdma_dwconv_axi.bresp),
+        .s_axi_bvalid   (xdma_dwconv_axi.bvalid),
+        .s_axi_bready   (xdma_dwconv_axi.bready),
+        .s_axi_arid     (xdma_dwconv_axi.arid),
+        .s_axi_araddr   (xdma_dwconv_axi.araddr[31:0]),
+        .s_axi_arlen    (xdma_dwconv_axi.arlen),
+        .s_axi_arsize   (xdma_dwconv_axi.arsize),
+        .s_axi_arburst  (xdma_dwconv_axi.arburst),
+        .s_axi_arlock   (xdma_dwconv_axi.arlock),
+        .s_axi_arcache  (xdma_dwconv_axi.arcache),
+        .s_axi_arprot   (xdma_dwconv_axi.arprot),
         .s_axi_arqos    (4'b0), // xdma does not support QoS
         .s_axi_arregion (4'b0), // xdma does not support region
-        .s_axi_arvalid  (xdma_m_axi.arvalid),
-        .s_axi_arready  (xdma_m_axi.arready),
-        .s_axi_rid      (xdma_m_axi.rid),
-        .s_axi_rdata    (xdma_m_axi.rdata),
-        .s_axi_rresp    (xdma_m_axi.rresp),
-        .s_axi_rlast    (xdma_m_axi.rlast),
-        .s_axi_rvalid   (xdma_m_axi.rvalid),
-        .s_axi_rready   (xdma_m_axi.rready),
+        .s_axi_arvalid  (xdma_dwconv_axi.arvalid),
+        .s_axi_arready  (xdma_dwconv_axi.arready),
+        .s_axi_rid      (xdma_dwconv_axi.rid),
+        .s_axi_rdata    (xdma_dwconv_axi.rdata),
+        .s_axi_rresp    (xdma_dwconv_axi.rresp),
+        .s_axi_rlast    (xdma_dwconv_axi.rlast),
+        .s_axi_rvalid   (xdma_dwconv_axi.rvalid),
+        .s_axi_rready   (xdma_dwconv_axi.rready),
 
         // 256-bit Master Interface to Crossbar S00
         // axi_dwidth_converter will force m_axi_awid to 1'b0 downstream with internal mapping table
         // so m_axi_awid, bid, arid, rid wont exist
-        // .m_axi_awid     (conv_m_axi.awid),
-        .m_axi_awaddr   (conv_m_axi.awaddr),
-        .m_axi_awlen    (conv_m_axi.awlen),
-        .m_axi_awsize   (conv_m_axi.awsize),
-        .m_axi_awburst  (conv_m_axi.awburst),
-        .m_axi_awlock   (conv_m_axi.awlock),
-        .m_axi_awcache  (conv_m_axi.awcache),
-        .m_axi_awprot   (conv_m_axi.awprot),
-        .m_axi_awqos    (conv_m_axi.awqos),
-        .m_axi_awregion (conv_m_axi.awregion),
-        .m_axi_awvalid  (conv_m_axi.awvalid),
-        .m_axi_awready  (conv_m_axi.awready),
-        .m_axi_wdata    (conv_m_axi.wdata),
-        .m_axi_wstrb    (conv_m_axi.wstrb),
-        .m_axi_wlast    (conv_m_axi.wlast),
-        .m_axi_wvalid   (conv_m_axi.wvalid),
-        .m_axi_wready   (conv_m_axi.wready),
-        // .m_axi_bid      (conv_m_axi.bid),
-        .m_axi_bresp    (conv_m_axi.bresp),
-        .m_axi_bvalid   (conv_m_axi.bvalid),
-        .m_axi_bready   (conv_m_axi.bready),
-        // .m_axi_arid     (conv_m_axi.arid),
-        .m_axi_araddr   (conv_m_axi.araddr),
-        .m_axi_arlen    (conv_m_axi.arlen),
-        .m_axi_arsize   (conv_m_axi.arsize),
-        .m_axi_arburst  (conv_m_axi.arburst),
-        .m_axi_arlock   (conv_m_axi.arlock),
-        .m_axi_arcache  (conv_m_axi.arcache),
-        .m_axi_arprot   (conv_m_axi.arprot),
-        .m_axi_arqos    (conv_m_axi.arqos),
-        .m_axi_arregion (conv_m_axi.arregion),
-        .m_axi_arvalid  (conv_m_axi.arvalid),
-        .m_axi_arready  (conv_m_axi.arready),
-        // .m_axi_rid      (conv_m_axi.rid),
-        .m_axi_rdata    (conv_m_axi.rdata),
-        .m_axi_rresp    (conv_m_axi.rresp),
-        .m_axi_rlast    (conv_m_axi.rlast),
-        .m_axi_rvalid   (conv_m_axi.rvalid),
-        .m_axi_rready   (conv_m_axi.rready)
+        // .m_axi_awid     (dwconv_xbar_axi.awid),
+        .m_axi_awaddr   (dwconv_xbar_axi.awaddr),
+        .m_axi_awlen    (dwconv_xbar_axi.awlen),
+        .m_axi_awsize   (dwconv_xbar_axi.awsize),
+        .m_axi_awburst  (dwconv_xbar_axi.awburst),
+        .m_axi_awlock   (dwconv_xbar_axi.awlock),
+        .m_axi_awcache  (dwconv_xbar_axi.awcache),
+        .m_axi_awprot   (dwconv_xbar_axi.awprot),
+        .m_axi_awqos    (dwconv_xbar_axi.awqos),
+        .m_axi_awregion (dwconv_xbar_axi.awregion),
+        .m_axi_awvalid  (dwconv_xbar_axi.awvalid),
+        .m_axi_awready  (dwconv_xbar_axi.awready),
+        .m_axi_wdata    (dwconv_xbar_axi.wdata),
+        .m_axi_wstrb    (dwconv_xbar_axi.wstrb),
+        .m_axi_wlast    (dwconv_xbar_axi.wlast),
+        .m_axi_wvalid   (dwconv_xbar_axi.wvalid),
+        .m_axi_wready   (dwconv_xbar_axi.wready),
+        // .m_axi_bid      (dwconv_xbar_axi.bid),
+        .m_axi_bresp    (dwconv_xbar_axi.bresp),
+        .m_axi_bvalid   (dwconv_xbar_axi.bvalid),
+        .m_axi_bready   (dwconv_xbar_axi.bready),
+        // .m_axi_arid     (dwconv_xbar_axi.arid),
+        .m_axi_araddr   (dwconv_xbar_axi.araddr),
+        .m_axi_arlen    (dwconv_xbar_axi.arlen),
+        .m_axi_arsize   (dwconv_xbar_axi.arsize),
+        .m_axi_arburst  (dwconv_xbar_axi.arburst),
+        .m_axi_arlock   (dwconv_xbar_axi.arlock),
+        .m_axi_arcache  (dwconv_xbar_axi.arcache),
+        .m_axi_arprot   (dwconv_xbar_axi.arprot),
+        .m_axi_arqos    (dwconv_xbar_axi.arqos),
+        .m_axi_arregion (dwconv_xbar_axi.arregion),
+        .m_axi_arvalid  (dwconv_xbar_axi.arvalid),
+        .m_axi_arready  (dwconv_xbar_axi.arready),
+        // .m_axi_rid      (dwconv_xbar_axi.rid),
+        .m_axi_rdata    (dwconv_xbar_axi.rdata),
+        .m_axi_rresp    (dwconv_xbar_axi.rresp),
+        .m_axi_rlast    (dwconv_xbar_axi.rlast),
+        .m_axi_rvalid   (dwconv_xbar_axi.rvalid),
+        .m_axi_rready   (dwconv_xbar_axi.rready)
     );
 
     // -------------------------------------------------------------------------
@@ -347,44 +347,44 @@ module top (
         .aresetn        (axi_aresetn),
         
         // The max thread id width is 1 (S01_ID_W=1, S00_ID_W=1), 
-        // so Crossbar output xbar_m_axi and DDR3 mig_m_axi id_w will be max(1,1) + 1 = 2
+        // so Crossbar output xbar_cdc_axi and DDR3 cdc_mig_axi id_w will be max(1,1) + 1 = 2
         // Slave Ports (S00 = GPU Core (ID=1), S01 = XDMA (ID=4))
         // ({high S01, low S00}) 
-        .s_axi_awid     ({conv_m_axi.awid, core_m_axi.awid}),
-        .s_axi_awaddr   ({conv_m_axi.awaddr, core_m_axi.awaddr}),
-        .s_axi_awlen    ({conv_m_axi.awlen, core_m_axi.awlen}),
-        .s_axi_awsize   ({conv_m_axi.awsize, core_m_axi.awsize}),
-        .s_axi_awburst  ({conv_m_axi.awburst, core_m_axi.awburst}),
-        .s_axi_awlock   ({conv_m_axi.awlock, core_m_axi.awlock}),
-        .s_axi_awcache  ({conv_m_axi.awcache, core_m_axi.awcache}),
-        .s_axi_awprot   ({conv_m_axi.awprot, core_m_axi.awprot}),
-        .s_axi_awqos    ({conv_m_axi.awqos, core_m_axi.awqos}),
-        // .s_axi_awregion ({conv_m_axi.awregion, core_m_axi.awregion}), // region is omitted in crossbar
-        .s_axi_awvalid  ({conv_m_axi.awvalid, core_m_axi.awvalid}),
+        .s_axi_awid     ({dwconv_xbar_axi.awid, gpu_xbar_axi.awid}),
+        .s_axi_awaddr   ({dwconv_xbar_axi.awaddr, gpu_xbar_axi.awaddr}),
+        .s_axi_awlen    ({dwconv_xbar_axi.awlen, gpu_xbar_axi.awlen}),
+        .s_axi_awsize   ({dwconv_xbar_axi.awsize, gpu_xbar_axi.awsize}),
+        .s_axi_awburst  ({dwconv_xbar_axi.awburst, gpu_xbar_axi.awburst}),
+        .s_axi_awlock   ({dwconv_xbar_axi.awlock, gpu_xbar_axi.awlock}),
+        .s_axi_awcache  ({dwconv_xbar_axi.awcache, gpu_xbar_axi.awcache}),
+        .s_axi_awprot   ({dwconv_xbar_axi.awprot, gpu_xbar_axi.awprot}),
+        .s_axi_awqos    ({dwconv_xbar_axi.awqos, gpu_xbar_axi.awqos}),
+        // .s_axi_awregion ({dwconv_xbar_axi.awregion, gpu_xbar_axi.awregion}), // region is omitted in crossbar
+        .s_axi_awvalid  ({dwconv_xbar_axi.awvalid, gpu_xbar_axi.awvalid}),
         .s_axi_awready  (xbar_s_awready),
 
-        .s_axi_wdata    ({conv_m_axi.wdata, core_m_axi.wdata}),
-        .s_axi_wstrb    ({conv_m_axi.wstrb, core_m_axi.wstrb}),
-        .s_axi_wlast    ({conv_m_axi.wlast, core_m_axi.wlast}),
-        .s_axi_wvalid   ({conv_m_axi.wvalid, core_m_axi.wvalid}),
+        .s_axi_wdata    ({dwconv_xbar_axi.wdata, gpu_xbar_axi.wdata}),
+        .s_axi_wstrb    ({dwconv_xbar_axi.wstrb, gpu_xbar_axi.wstrb}),
+        .s_axi_wlast    ({dwconv_xbar_axi.wlast, gpu_xbar_axi.wlast}),
+        .s_axi_wvalid   ({dwconv_xbar_axi.wvalid, gpu_xbar_axi.wvalid}),
         .s_axi_wready   (xbar_s_wready),
 
         .s_axi_bid      (xbar_s_bid),
         .s_axi_bresp    (xbar_s_bresp),
         .s_axi_bvalid   (xbar_s_bvalid),
-        .s_axi_bready   ({conv_m_axi.bready, core_m_axi.bready}),
+        .s_axi_bready   ({dwconv_xbar_axi.bready, gpu_xbar_axi.bready}),
 
-        .s_axi_arid     ({conv_m_axi.arid, core_m_axi.arid}),
-        .s_axi_araddr   ({conv_m_axi.araddr, core_m_axi.araddr}),
-        .s_axi_arlen    ({conv_m_axi.arlen, core_m_axi.arlen}),
-        .s_axi_arsize   ({conv_m_axi.arsize, core_m_axi.arsize}),
-        .s_axi_arburst  ({conv_m_axi.arburst, core_m_axi.arburst}),
-        .s_axi_arlock   ({conv_m_axi.arlock, core_m_axi.arlock}),
-        .s_axi_arcache  ({conv_m_axi.arcache, core_m_axi.arcache}),
-        .s_axi_arprot   ({conv_m_axi.arprot, core_m_axi.arprot}),
-        .s_axi_arqos    ({conv_m_axi.arqos, core_m_axi.arqos}),
-        // .s_axi_arregion ({conv_m_axi.arregion, core_m_axi.arregion}), // region is omitted in crossbar
-        .s_axi_arvalid  ({conv_m_axi.arvalid, core_m_axi.arvalid}),
+        .s_axi_arid     ({dwconv_xbar_axi.arid, gpu_xbar_axi.arid}),
+        .s_axi_araddr   ({dwconv_xbar_axi.araddr, gpu_xbar_axi.araddr}),
+        .s_axi_arlen    ({dwconv_xbar_axi.arlen, gpu_xbar_axi.arlen}),
+        .s_axi_arsize   ({dwconv_xbar_axi.arsize, gpu_xbar_axi.arsize}),
+        .s_axi_arburst  ({dwconv_xbar_axi.arburst, gpu_xbar_axi.arburst}),
+        .s_axi_arlock   ({dwconv_xbar_axi.arlock, gpu_xbar_axi.arlock}),
+        .s_axi_arcache  ({dwconv_xbar_axi.arcache, gpu_xbar_axi.arcache}),
+        .s_axi_arprot   ({dwconv_xbar_axi.arprot, gpu_xbar_axi.arprot}),
+        .s_axi_arqos    ({dwconv_xbar_axi.arqos, gpu_xbar_axi.arqos}),
+        // .s_axi_arregion ({dwconv_xbar_axi.arregion, gpu_xbar_axi.arregion}), // region is omitted in crossbar
+        .s_axi_arvalid  ({dwconv_xbar_axi.arvalid, gpu_xbar_axi.arvalid}),
         .s_axi_arready  (xbar_s_arready),
 
         .s_axi_rid      (xbar_s_rid),
@@ -392,48 +392,48 @@ module top (
         .s_axi_rresp    (xbar_s_rresp),
         .s_axi_rlast    (xbar_s_rlast),
         .s_axi_rvalid   (xbar_s_rvalid),
-        .s_axi_rready   ({conv_m_axi.rready, core_m_axi.rready}),
+        .s_axi_rready   ({dwconv_xbar_axi.rready, gpu_xbar_axi.rready}),
 
         // Master Port 0 (M00: 256-bit to MIG DDR3 S_AXI)
-        .m_axi_awid      (xbar_m_axi.awid),
-        .m_axi_awaddr    (xbar_m_axi.awaddr),
-        .m_axi_awlen     (xbar_m_axi.awlen),
-        .m_axi_awsize    (xbar_m_axi.awsize),
-        .m_axi_awburst   (xbar_m_axi.awburst),
-        .m_axi_awlock    (xbar_m_axi.awlock),
-        .m_axi_awcache   (xbar_m_axi.awcache),
-        .m_axi_awprot    (xbar_m_axi.awprot),
-        .m_axi_awqos     (xbar_m_axi.awqos),
-        .m_axi_awregion  (xbar_m_axi.awregion),
-        .m_axi_awvalid   (xbar_m_axi.awvalid),
-        .m_axi_awready   (xbar_m_axi.awready),
-        .m_axi_wdata     (xbar_m_axi.wdata),
-        .m_axi_wstrb     (xbar_m_axi.wstrb),
-        .m_axi_wlast     (xbar_m_axi.wlast),
-        .m_axi_wvalid    (xbar_m_axi.wvalid),
-        .m_axi_wready    (xbar_m_axi.wready),
-        .m_axi_bid       (xbar_m_axi.bid),
-        .m_axi_bresp     (xbar_m_axi.bresp),
-        .m_axi_bvalid    (xbar_m_axi.bvalid),
-        .m_axi_bready    (xbar_m_axi.bready),
-        .m_axi_arid      (xbar_m_axi.arid),
-        .m_axi_araddr    (xbar_m_axi.araddr),
-        .m_axi_arlen     (xbar_m_axi.arlen),
-        .m_axi_arsize    (xbar_m_axi.arsize),
-        .m_axi_arburst   (xbar_m_axi.arburst),
-        .m_axi_arlock    (xbar_m_axi.arlock),
-        .m_axi_arcache   (xbar_m_axi.arcache),
-        .m_axi_arprot    (xbar_m_axi.arprot),
-        .m_axi_arqos     (xbar_m_axi.arqos),
-        .m_axi_arregion  (xbar_m_axi.arregion),
-        .m_axi_arvalid   (xbar_m_axi.arvalid),
-        .m_axi_arready   (xbar_m_axi.arready),
-        .m_axi_rid       (xbar_m_axi.rid),
-        .m_axi_rdata     (xbar_m_axi.rdata),
-        .m_axi_rresp     (xbar_m_axi.rresp),
-        .m_axi_rlast     (xbar_m_axi.rlast),
-        .m_axi_rvalid    (xbar_m_axi.rvalid),
-        .m_axi_rready    (xbar_m_axi.rready)
+        .m_axi_awid      (xbar_cdc_axi.awid),
+        .m_axi_awaddr    (xbar_cdc_axi.awaddr),
+        .m_axi_awlen     (xbar_cdc_axi.awlen),
+        .m_axi_awsize    (xbar_cdc_axi.awsize),
+        .m_axi_awburst   (xbar_cdc_axi.awburst),
+        .m_axi_awlock    (xbar_cdc_axi.awlock),
+        .m_axi_awcache   (xbar_cdc_axi.awcache),
+        .m_axi_awprot    (xbar_cdc_axi.awprot),
+        .m_axi_awqos     (xbar_cdc_axi.awqos),
+        .m_axi_awregion  (xbar_cdc_axi.awregion),
+        .m_axi_awvalid   (xbar_cdc_axi.awvalid),
+        .m_axi_awready   (xbar_cdc_axi.awready),
+        .m_axi_wdata     (xbar_cdc_axi.wdata),
+        .m_axi_wstrb     (xbar_cdc_axi.wstrb),
+        .m_axi_wlast     (xbar_cdc_axi.wlast),
+        .m_axi_wvalid    (xbar_cdc_axi.wvalid),
+        .m_axi_wready    (xbar_cdc_axi.wready),
+        .m_axi_bid       (xbar_cdc_axi.bid),
+        .m_axi_bresp     (xbar_cdc_axi.bresp),
+        .m_axi_bvalid    (xbar_cdc_axi.bvalid),
+        .m_axi_bready    (xbar_cdc_axi.bready),
+        .m_axi_arid      (xbar_cdc_axi.arid),
+        .m_axi_araddr    (xbar_cdc_axi.araddr),
+        .m_axi_arlen     (xbar_cdc_axi.arlen),
+        .m_axi_arsize    (xbar_cdc_axi.arsize),
+        .m_axi_arburst   (xbar_cdc_axi.arburst),
+        .m_axi_arlock    (xbar_cdc_axi.arlock),
+        .m_axi_arcache   (xbar_cdc_axi.arcache),
+        .m_axi_arprot    (xbar_cdc_axi.arprot),
+        .m_axi_arqos     (xbar_cdc_axi.arqos),
+        .m_axi_arregion  (xbar_cdc_axi.arregion),
+        .m_axi_arvalid   (xbar_cdc_axi.arvalid),
+        .m_axi_arready   (xbar_cdc_axi.arready),
+        .m_axi_rid       (xbar_cdc_axi.rid),
+        .m_axi_rdata     (xbar_cdc_axi.rdata),
+        .m_axi_rresp     (xbar_cdc_axi.rresp),
+        .m_axi_rlast     (xbar_cdc_axi.rlast),
+        .m_axi_rvalid    (xbar_cdc_axi.rvalid),
+        .m_axi_rready    (xbar_cdc_axi.rready)
     );
 
     // -------------------------------------------------------------------------
@@ -451,86 +451,86 @@ module top (
         .m_axi_aresetn (ui_clk_aresetn),
 
         // Slave Port (from Crossbar)
-        .s_axi_awid    (xbar_m_axi.awid),
-        .s_axi_awaddr  (xbar_m_axi.awaddr),
-        .s_axi_awlen   (xbar_m_axi.awlen),
-        .s_axi_awsize  (xbar_m_axi.awsize),
-        .s_axi_awburst (xbar_m_axi.awburst),
-        .s_axi_awlock  (xbar_m_axi.awlock),
-        .s_axi_awcache (xbar_m_axi.awcache),
-        .s_axi_awprot  (xbar_m_axi.awprot),
-        .s_axi_awqos   (xbar_m_axi.awqos),
-        .s_axi_awregion(xbar_m_axi.awregion),
-        .s_axi_awvalid (xbar_m_axi.awvalid),
-        .s_axi_awready (xbar_m_axi.awready),
-        .s_axi_wdata   (xbar_m_axi.wdata),
-        .s_axi_wstrb   (xbar_m_axi.wstrb),
-        .s_axi_wlast   (xbar_m_axi.wlast),
-        .s_axi_wvalid  (xbar_m_axi.wvalid),
-        .s_axi_wready  (xbar_m_axi.wready),
-        .s_axi_bid     (xbar_m_axi.bid),
-        .s_axi_bresp   (xbar_m_axi.bresp),
-        .s_axi_bvalid  (xbar_m_axi.bvalid),
-        .s_axi_bready  (xbar_m_axi.bready),
-        .s_axi_arid    (xbar_m_axi.arid),
-        .s_axi_araddr  (xbar_m_axi.araddr),
-        .s_axi_arlen   (xbar_m_axi.arlen),
-        .s_axi_arsize  (xbar_m_axi.arsize),
-        .s_axi_arburst (xbar_m_axi.arburst),
-        .s_axi_arlock  (xbar_m_axi.arlock),
-        .s_axi_arcache (xbar_m_axi.arcache),
-        .s_axi_arprot  (xbar_m_axi.arprot),
-        .s_axi_arqos   (xbar_m_axi.arqos),
-        .s_axi_arregion(xbar_m_axi.arregion),
-        .s_axi_arvalid (xbar_m_axi.arvalid),
-        .s_axi_arready (xbar_m_axi.arready),
-        .s_axi_rid     (xbar_m_axi.rid),
-        .s_axi_rdata   (xbar_m_axi.rdata),
-        .s_axi_rresp   (xbar_m_axi.rresp),
-        .s_axi_rlast   (xbar_m_axi.rlast),
-        .s_axi_rvalid  (xbar_m_axi.rvalid),
-        .s_axi_rready  (xbar_m_axi.rready),
+        .s_axi_awid    (xbar_cdc_axi.awid),
+        .s_axi_awaddr  (xbar_cdc_axi.awaddr),
+        .s_axi_awlen   (xbar_cdc_axi.awlen),
+        .s_axi_awsize  (xbar_cdc_axi.awsize),
+        .s_axi_awburst (xbar_cdc_axi.awburst),
+        .s_axi_awlock  (xbar_cdc_axi.awlock),
+        .s_axi_awcache (xbar_cdc_axi.awcache),
+        .s_axi_awprot  (xbar_cdc_axi.awprot),
+        .s_axi_awqos   (xbar_cdc_axi.awqos),
+        .s_axi_awregion(xbar_cdc_axi.awregion),
+        .s_axi_awvalid (xbar_cdc_axi.awvalid),
+        .s_axi_awready (xbar_cdc_axi.awready),
+        .s_axi_wdata   (xbar_cdc_axi.wdata),
+        .s_axi_wstrb   (xbar_cdc_axi.wstrb),
+        .s_axi_wlast   (xbar_cdc_axi.wlast),
+        .s_axi_wvalid  (xbar_cdc_axi.wvalid),
+        .s_axi_wready  (xbar_cdc_axi.wready),
+        .s_axi_bid     (xbar_cdc_axi.bid),
+        .s_axi_bresp   (xbar_cdc_axi.bresp),
+        .s_axi_bvalid  (xbar_cdc_axi.bvalid),
+        .s_axi_bready  (xbar_cdc_axi.bready),
+        .s_axi_arid    (xbar_cdc_axi.arid),
+        .s_axi_araddr  (xbar_cdc_axi.araddr),
+        .s_axi_arlen   (xbar_cdc_axi.arlen),
+        .s_axi_arsize  (xbar_cdc_axi.arsize),
+        .s_axi_arburst (xbar_cdc_axi.arburst),
+        .s_axi_arlock  (xbar_cdc_axi.arlock),
+        .s_axi_arcache (xbar_cdc_axi.arcache),
+        .s_axi_arprot  (xbar_cdc_axi.arprot),
+        .s_axi_arqos   (xbar_cdc_axi.arqos),
+        .s_axi_arregion(xbar_cdc_axi.arregion),
+        .s_axi_arvalid (xbar_cdc_axi.arvalid),
+        .s_axi_arready (xbar_cdc_axi.arready),
+        .s_axi_rid     (xbar_cdc_axi.rid),
+        .s_axi_rdata   (xbar_cdc_axi.rdata),
+        .s_axi_rresp   (xbar_cdc_axi.rresp),
+        .s_axi_rlast   (xbar_cdc_axi.rlast),
+        .s_axi_rvalid  (xbar_cdc_axi.rvalid),
+        .s_axi_rready  (xbar_cdc_axi.rready),
 
         // Master Port (to MIG DDR3)
-        .m_axi_awid    (mig_m_axi.awid),
-        .m_axi_awaddr  (mig_m_axi.awaddr),
-        .m_axi_awlen   (mig_m_axi.awlen),
-        .m_axi_awsize  (mig_m_axi.awsize),
-        .m_axi_awburst (mig_m_axi.awburst),
-        .m_axi_awlock  (mig_m_axi.awlock),
-        .m_axi_awcache (mig_m_axi.awcache),
-        .m_axi_awprot  (mig_m_axi.awprot),
-        .m_axi_awqos   (mig_m_axi.awqos),
-        .m_axi_awregion(mig_m_axi.awregion),
-        .m_axi_awvalid (mig_m_axi.awvalid),
-        .m_axi_awready (mig_m_axi.awready),
-        .m_axi_wdata   (mig_m_axi.wdata),
-        .m_axi_wstrb   (mig_m_axi.wstrb),
-        .m_axi_wlast   (mig_m_axi.wlast),
-        .m_axi_wvalid  (mig_m_axi.wvalid),
-        .m_axi_wready  (mig_m_axi.wready),
-        .m_axi_bid     (mig_m_axi.bid),
-        .m_axi_bresp   (mig_m_axi.bresp),
-        .m_axi_bvalid  (mig_m_axi.bvalid),
-        .m_axi_bready  (mig_m_axi.bready),
-        .m_axi_arid    (mig_m_axi.arid),
-        .m_axi_araddr  (mig_m_axi.araddr),
-        .m_axi_arlen   (mig_m_axi.arlen),
-        .m_axi_arsize  (mig_m_axi.arsize),
-        .m_axi_arburst (mig_m_axi.arburst),
-        .m_axi_arlock  (mig_m_axi.arlock),
-        .m_axi_arcache (mig_m_axi.arcache),
-        .m_axi_arprot  (mig_m_axi.arprot),
-        .m_axi_arqos   (mig_m_axi.arqos),
-        .m_axi_arregion(mig_m_axi.arregion),
-        .m_axi_arvalid (mig_m_axi.arvalid),
-        .m_axi_arready (mig_m_axi.arready),
-        .m_axi_rid     (mig_m_axi.rid),
-        .m_axi_rdata   (mig_m_axi.rdata),
-        .m_axi_rresp   (mig_m_axi.rresp),
-        .m_axi_rlast   (mig_m_axi.rlast),
-        .m_axi_rvalid  (mig_m_axi.rvalid),
-        .m_axi_rready  (mig_m_axi.rready)
+        .m_axi_awid    (cdc_mig_axi.awid),
+        .m_axi_awaddr  (cdc_mig_axi.awaddr),
+        .m_axi_awlen   (cdc_mig_axi.awlen),
+        .m_axi_awsize  (cdc_mig_axi.awsize),
+        .m_axi_awburst (cdc_mig_axi.awburst),
+        .m_axi_awlock  (cdc_mig_axi.awlock),
+        .m_axi_awcache (cdc_mig_axi.awcache),
+        .m_axi_awprot  (cdc_mig_axi.awprot),
+        .m_axi_awqos   (cdc_mig_axi.awqos),
+        .m_axi_awregion(cdc_mig_axi.awregion),
+        .m_axi_awvalid (cdc_mig_axi.awvalid),
+        .m_axi_awready (cdc_mig_axi.awready),
+        .m_axi_wdata   (cdc_mig_axi.wdata),
+        .m_axi_wstrb   (cdc_mig_axi.wstrb),
+        .m_axi_wlast   (cdc_mig_axi.wlast),
+        .m_axi_wvalid  (cdc_mig_axi.wvalid),
+        .m_axi_wready  (cdc_mig_axi.wready),
+        .m_axi_bid     (cdc_mig_axi.bid),
+        .m_axi_bresp   (cdc_mig_axi.bresp),
+        .m_axi_bvalid  (cdc_mig_axi.bvalid),
+        .m_axi_bready  (cdc_mig_axi.bready),
+        .m_axi_arid    (cdc_mig_axi.arid),
+        .m_axi_araddr  (cdc_mig_axi.araddr),
+        .m_axi_arlen   (cdc_mig_axi.arlen),
+        .m_axi_arsize  (cdc_mig_axi.arsize),
+        .m_axi_arburst (cdc_mig_axi.arburst),
+        .m_axi_arlock  (cdc_mig_axi.arlock),
+        .m_axi_arcache (cdc_mig_axi.arcache),
+        .m_axi_arprot  (cdc_mig_axi.arprot),
+        .m_axi_arqos   (cdc_mig_axi.arqos),
+        .m_axi_arregion(cdc_mig_axi.arregion),
+        .m_axi_arvalid (cdc_mig_axi.arvalid),
+        .m_axi_arready (cdc_mig_axi.arready),
+        .m_axi_rid     (cdc_mig_axi.rid),
+        .m_axi_rdata   (cdc_mig_axi.rdata),
+        .m_axi_rresp   (cdc_mig_axi.rresp),
+        .m_axi_rlast   (cdc_mig_axi.rlast),
+        .m_axi_rvalid  (cdc_mig_axi.rvalid),
+        .m_axi_rready  (cdc_mig_axi.rready)
     );
 
     // -------------------------------------------------------------------------
@@ -584,43 +584,43 @@ module top (
         .app_zq_req     (1'b0),
 
         // 256-bit AXI4 Slave Interface from Clock Converter
-        .s_axi_awid     (mig_m_axi.awid),
-        .s_axi_awaddr   (mig_m_axi.awaddr),
-        .s_axi_awlen    (mig_m_axi.awlen),
-        .s_axi_awsize   (mig_m_axi.awsize),
-        .s_axi_awburst  (mig_m_axi.awburst),
-        .s_axi_awlock   (mig_m_axi.awlock),
-        .s_axi_awcache  (mig_m_axi.awcache),
-        .s_axi_awprot   (mig_m_axi.awprot),
-        .s_axi_awqos    (mig_m_axi.awqos),
-        .s_axi_awvalid  (mig_m_axi.awvalid),
-        .s_axi_awready  (mig_m_axi.awready),
-        .s_axi_wdata    (mig_m_axi.wdata),
-        .s_axi_wstrb    (mig_m_axi.wstrb),
-        .s_axi_wlast    (mig_m_axi.wlast),
-        .s_axi_wvalid   (mig_m_axi.wvalid),
-        .s_axi_wready   (mig_m_axi.wready),
-        .s_axi_bready   (mig_m_axi.bready),
-        .s_axi_bvalid   (mig_m_axi.bvalid),
-        .s_axi_bid      (mig_m_axi.bid),
-        .s_axi_bresp    (mig_m_axi.bresp),
-        .s_axi_arid     (mig_m_axi.arid),
-        .s_axi_araddr   (mig_m_axi.araddr),
-        .s_axi_arlen    (mig_m_axi.arlen),
-        .s_axi_arsize   (mig_m_axi.arsize),
-        .s_axi_arburst  (mig_m_axi.arburst),
-        .s_axi_arlock   (mig_m_axi.arlock),
-        .s_axi_arcache  (mig_m_axi.arcache),
-        .s_axi_arprot   (mig_m_axi.arprot),
-        .s_axi_arqos    (mig_m_axi.arqos),
-        .s_axi_arvalid  (mig_m_axi.arvalid),
-        .s_axi_arready  (mig_m_axi.arready),
-        .s_axi_rready   (mig_m_axi.rready),
-        .s_axi_rdata    (mig_m_axi.rdata),
-        .s_axi_rvalid   (mig_m_axi.rvalid),
-        .s_axi_rid      (mig_m_axi.rid),
-        .s_axi_rresp    (mig_m_axi.rresp),
-        .s_axi_rlast    (mig_m_axi.rlast)
+        .s_axi_awid     (cdc_mig_axi.awid),
+        .s_axi_awaddr   (cdc_mig_axi.awaddr),
+        .s_axi_awlen    (cdc_mig_axi.awlen),
+        .s_axi_awsize   (cdc_mig_axi.awsize),
+        .s_axi_awburst  (cdc_mig_axi.awburst),
+        .s_axi_awlock   (cdc_mig_axi.awlock),
+        .s_axi_awcache  (cdc_mig_axi.awcache),
+        .s_axi_awprot   (cdc_mig_axi.awprot),
+        .s_axi_awqos    (cdc_mig_axi.awqos),
+        .s_axi_awvalid  (cdc_mig_axi.awvalid),
+        .s_axi_awready  (cdc_mig_axi.awready),
+        .s_axi_wdata    (cdc_mig_axi.wdata),
+        .s_axi_wstrb    (cdc_mig_axi.wstrb),
+        .s_axi_wlast    (cdc_mig_axi.wlast),
+        .s_axi_wvalid   (cdc_mig_axi.wvalid),
+        .s_axi_wready   (cdc_mig_axi.wready),
+        .s_axi_bready   (cdc_mig_axi.bready),
+        .s_axi_bvalid   (cdc_mig_axi.bvalid),
+        .s_axi_bid      (cdc_mig_axi.bid),
+        .s_axi_bresp    (cdc_mig_axi.bresp),
+        .s_axi_arid     (cdc_mig_axi.arid),
+        .s_axi_araddr   (cdc_mig_axi.araddr),
+        .s_axi_arlen    (cdc_mig_axi.arlen),
+        .s_axi_arsize   (cdc_mig_axi.arsize),
+        .s_axi_arburst  (cdc_mig_axi.arburst),
+        .s_axi_arlock   (cdc_mig_axi.arlock),
+        .s_axi_arcache  (cdc_mig_axi.arcache),
+        .s_axi_arprot   (cdc_mig_axi.arprot),
+        .s_axi_arqos    (cdc_mig_axi.arqos),
+        .s_axi_arvalid  (cdc_mig_axi.arvalid),
+        .s_axi_arready  (cdc_mig_axi.arready),
+        .s_axi_rready   (cdc_mig_axi.rready),
+        .s_axi_rdata    (cdc_mig_axi.rdata),
+        .s_axi_rvalid   (cdc_mig_axi.rvalid),
+        .s_axi_rid      (cdc_mig_axi.rid),
+        .s_axi_rresp    (cdc_mig_axi.rresp),
+        .s_axi_rlast    (cdc_mig_axi.rlast)
     );
 
     // -------------------------------------------------------------------------
@@ -629,17 +629,17 @@ module top (
     wire        cp_trap;
     
     // Hardware Engine AXI-Lite Interface
-    axi_lite_if #(.ADDR_W(32), .DATA_W(32)) cp_to_gpu_axil();
+    axi_lite_if #(.ADDR_W(32), .DATA_W(32)) rv_gpu_axil();
 
     riscv_cp_system u_riscv_cp (
         .clk                    (axi_aclk),
         .rst_n                  (axi_aresetn),
 
         // PCIe XDMA BAR0 AXI-Lite Slave Interface
-        .s_axi                  (xdma_axil),
+        .s_axi                  (xdma_rv_axil),
 
         // GPU Hardware Engine AXI-Lite Master Interface
-        .m_axi_lite             (cp_to_gpu_axil),
+        .m_axi_lite             (rv_gpu_axil),
 
         .trap_out               (cp_trap)
     );
@@ -687,14 +687,14 @@ module top (
         .rst_n                  (axi_aresetn),
         
         // AXI4-Lite Slave Interface (From RISC-V)
-        .s_axi_lite             (cp_to_gpu_axil),
+        .s_axi_lite             (rv_gpu_axil),
         
         .fb_we                  (fb_we),
         .fb_addr                (fb_addr),
         .fb_rgb                 (fb_rgb),
         
         // 256-bit AXI4-Full Master Interface (Direct to Crossbar S01)
-        .m_axi_gmem             (core_m_axi)
+        .m_axi_gmem             (gpu_xbar_axi)
     );
 
 endmodule
