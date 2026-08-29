@@ -1,7 +1,11 @@
 `timescale 1ns / 1ps
-// SM Load/Store Unit (LSU)
-// Receives memory instructions, communicates with L1 Data Cache, 
-// and writes back data to the VRF upon completion.
+// LSU (Load/Store Unit)
+//
+// LSU handles all memory access instructions (LDR, STR). It is 
+// "Decoupled" from the main ALU pipeline. This means when a warp executes 
+// a memory instruction, it is offloaded to the LSU, and the main scheduler 
+// can immediately issue instructions from OTHER warps, hiding memory latency.
+//
 
 module lsu (
     input wire clk,

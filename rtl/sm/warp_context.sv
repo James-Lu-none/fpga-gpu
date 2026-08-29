@@ -1,7 +1,12 @@
 `timescale 1ns / 1ps
-// Streaming Multiprocessor (SM) - Warp Context & Scheduler
-// Maintains the state (Context RAM) of resident warps and dynamically schedules
-// READY warps to the instruction fetch stage.
+
+// This module maintains the state (PC, Active Mask, Status) of up to 16 resident warps.
+// 
+// SIMT Stack (Branch Divergence Stack):
+// To handle IF/ELSE branches where threads in the same warp diverge, this 
+// module implements a hardware stack. It pushes the 'Not Taken' path onto 
+// the stack and follows the 'Taken' path. When a 'SYNC' instruction is hit, 
+// it pops the stack to resume the other path. ('if' branch first, 'else' branch second)
 
 module warp_context #(
     parameter MAX_WARPS = 16

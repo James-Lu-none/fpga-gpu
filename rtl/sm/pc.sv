@@ -1,6 +1,14 @@
 `timescale 1ns / 1ps
 // PC (Program Counter & Branch Control Unit)
-// Evaluates branch conditions, divergence masks, and next PC
+//
+// This module evaluates branch conditions and computes the next Program 
+// Counter (PC) for the warp. It tracks the Negative/Zero/Positive (NZP) 
+// condition codes for each thread (lane) individually.
+//
+// Branch Divergence:
+// If a branch condition evaluates to true for some threads but false for 
+// others, a "Divergence" occurs. The PC module generates a `taken_mask` 
+// and a `not_taken_mask` to split the warp.
 
 module pc #(
     parameter MAX_WARPS = 16
@@ -24,7 +32,7 @@ module pc #(
     input wire is_branch,
     input wire is_sync,
 
-    // State Update Interface (To sm_warp_context)
+    // Context Write-Back (Signals sent to the warp_context scheduler)
     output reg ctx_wb_valid,
     output reg [3:0] ctx_wb_warp_id,
     output reg [11:0] ctx_wb_next_pc,

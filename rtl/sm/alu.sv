@@ -1,6 +1,11 @@
 `timescale 1ns / 1ps
 // ALU (Arithmetic Logic Unit)
-// Implements Integer ALU and passes branch info to PC module
+// 
+// ALU is instantiated in processing_block.sv
+// currently it only supports integer arithmetic (ADD, SUB, MUL) 
+// and logical operations for all active threads in a warp. 
+// It processes multiple lanes in parallel
+//
 
 module alu #(
     parameter DATA_W = 64
