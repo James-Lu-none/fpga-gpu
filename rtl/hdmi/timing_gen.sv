@@ -1,35 +1,33 @@
-// =========================================================================
 // HDMI Video Timing Generator (Default: 1080P @ 60Hz, 148.5MHz Pixel Clock)
-// =========================================================================
 
 `timescale 1ns / 1ps
 
-module hdmi_timing_gen #(
+module timing_gen #(
     // CEA-861 Standard 1080P @ 60Hz Timing Parameters
     parameter H_ACTIVE = 12'd1920,
-    parameter H_FP     = 12'd88,
-    parameter H_SYNC   = 12'd44,
-    parameter H_BP     = 12'd148,
-    parameter H_TOTAL  = 12'd2200,
+    parameter H_FP = 12'd88,
+    parameter H_SYNC = 12'd44,
+    parameter H_BP = 12'd148,
+    parameter H_TOTAL = 12'd2200,
 
     parameter V_ACTIVE = 12'd1080,
-    parameter V_FP     = 12'd4,
-    parameter V_SYNC   = 12'd5,
-    parameter V_BP     = 12'd36,
-    parameter V_TOTAL  = 12'd1125,
+    parameter V_FP = 12'd4,
+    parameter V_SYNC = 12'd5,
+    parameter V_BP = 12'd36,
+    parameter V_TOTAL = 12'd1125,
 
     // Sync Polarity (1 = Active High, 0 = Active Low)
     parameter H_POLARITY = 1'b1,
     parameter V_POLARITY = 1'b1
 )(
-    input  wire        clk_pix,     // Pixel Clock (148.5MHz for 1080p, 74.25MHz for 720p)
-    input  wire        rst_n,       // Active Low Async Reset
+    input wire clk_pix, // Pixel Clock (148.5MHz for 1080p, 74.25MHz for 720p)
+    input wire rst_n, // Active Low Async Reset
 
-    output reg         video_hs,    // Horizontal Sync
-    output reg         video_vs,    // Vertical Sync
-    output reg         video_de,    // Data Enable (Active Video Area)
-    output reg  [11:0] pixel_x,     // Active Pixel X coordinate (0 ~ 1919)
-    output reg  [11:0] pixel_y      // Active Pixel Y coordinate (0 ~ 1079)
+    output reg video_hs, // Horizontal Sync
+    output reg video_vs, // Vertical Sync
+    output reg video_de, // Data Enable (Active Video Area)
+    output reg [11:0] pixel_x, // Active Pixel X coordinate (0 ~ 1919)
+    output reg [11:0] pixel_y // Active Pixel Y coordinate (0 ~ 1079)
 );
 
     // Pixel and Line Counters

@@ -1,8 +1,6 @@
 `timescale 1ns / 1ps
-////////////////////////////////////////////////////////////////////////////////--
 // Company: 
 // Engineer: 
-// 
 // Create Date: 2026/08/25
 // Design Name: Pure Verilog Top Level GPGPU SoC Wrapper
 // Module Name: top
@@ -10,74 +8,71 @@
 // Target Devices: Xilinx Artix-7 (XC7A200T-2FBG484)
 // Tool Versions: Vivado 2026+
 // Description: 
-//   Pure Verilog Top-Level Module for FPGA-GPU SoC:
-//   - PCIe Gen2 x2 XDMA Subsystem (xdma_0)
-//   - 64-bit to 256-bit AXI Data Width Converter (axi_dwidth_converter_0)
-//   - 256-bit 2-Slave to 1-Master AXI Crossbar Interconnect (axi_crossbar_0)
-//     * S00: Host PCIe DMA (via Converter) -> DDR3 VRAM 0x8000_0000
-//     * S01: GPGPU SM Compute Core (gpu_compute_core) -> DDR3 VRAM 0x8000_0000
-//     * M00: 1GB DDR3 VRAM Controller (mig_7series_0 at 0x8000_0000)
-//   - RISC-V Command Processor SoC (riscv_cp_system with 16KB BRAM Mailbox at 0x3F00)
-//   - GPGPU Streaming Multiprocessor (gpu_compute_core with Hardware Warp Scheduler)
-//   - Dual-Port Framebuffer VRAM (framebuffer_ram)
-//   - SiI9134 HDMI 1080P@60Hz Display Pipeline (hdmi_top)
-////////////////////////////////////////////////////////////////////////////////--
+// Pure Verilog Top-Level Module for FPGA-GPU SoC:
+// - PCIe Gen2 x2 XDMA Subsystem (xdma_0)
+// - 64-bit to 256-bit AXI Data Width Converter (axi_dwidth_converter_0)
+// - 256-bit 2-Slave to 1-Master AXI Crossbar Interconnect (axi_crossbar_0)
+// * S00: Host PCIe DMA (via Converter) -> DDR3 VRAM 0x8000_0000
+// * S01: GPGPU SM Compute Core (gpu_compute_core) -> DDR3 VRAM 0x8000_0000
+// * M00: 1GB DDR3 VRAM Controller (mig_7series_0 at 0x8000_0000)
+// - RISC-V Command Processor SoC (riscv_cp_system with 16KB BRAM Mailbox at 0x3F00)
+// - GPGPU Streaming Multiprocessor (gpu_compute_core with Hardware Warp Scheduler)
+// - Dual-Port Framebuffer VRAM (framebuffer_ram)
+// - SiI9134 HDMI 1080P@60Hz Display Pipeline (hdmi_top)
 
 module top (
     // PCIe Differential Reference Clock (Bank 216 MGTREFCLK0: F10/E10)
-    input  wire        sys_clk_clk_p,
-    input  wire        sys_clk_clk_n,
-    input  wire        sys_rst_n,
+    input wire sys_clk_clk_p,
+    input wire sys_clk_clk_n,
+    input wire sys_rst_n,
 
     // DDR3 200MHz System Differential Clock (Bank 34: R4/T4)
-    input  wire        sys_clk_p,
-    input  wire        sys_clk_n,
+    input wire sys_clk_p,
+    input wire sys_clk_n,
 
     // PCIe Transceiver Lanes (PCIe Gen2 x2)
-    input  wire [1:0]  pci_exp_rxp,
-    input  wire [1:0]  pci_exp_rxn,
-    output wire [1:0]  pci_exp_txp,
-    output wire [1:0]  pci_exp_txn,
+    input wire [1:0] pci_exp_rxp,
+    input wire [1:0] pci_exp_rxn,
+    output wire [1:0] pci_exp_txp,
+    output wire [1:0] pci_exp_txn,
 
     // DDR3 SDRAM Physical Pins (Bank 34/35 1GB 32-bit MT41J256M16HA x2)
-    inout  wire [31:0] ddr3_dq,
-    inout  wire [3:0]  ddr3_dqs_n,
-    inout  wire [3:0]  ddr3_dqs_p,
+    inout wire [31:0] ddr3_dq,
+    inout wire [3:0] ddr3_dqs_n,
+    inout wire [3:0] ddr3_dqs_p,
     output wire [14:0] ddr3_addr,
-    output wire [2:0]  ddr3_ba,
-    output wire        ddr3_ras_n,
-    output wire        ddr3_cas_n,
-    output wire        ddr3_we_n,
-    output wire        ddr3_reset_n,
-    output wire [0:0]  ddr3_ck_p,
-    output wire [0:0]  ddr3_ck_n,
-    output wire [0:0]  ddr3_cke,
-    output wire [3:0]  ddr3_dm,
-    output wire [0:0]  ddr3_odt,
+    output wire [2:0] ddr3_ba,
+    output wire ddr3_ras_n,
+    output wire ddr3_cas_n,
+    output wire ddr3_we_n,
+    output wire ddr3_reset_n,
+    output wire [0:0] ddr3_ck_p,
+    output wire [0:0] ddr3_ck_n,
+    output wire [0:0] ddr3_cke,
+    output wire [3:0] ddr3_dm,
+    output wire [0:0] ddr3_odt,
 
     // SiI9134 HDMI Physical Display Ports (Mapped to constrs/hdmi.xdc)
-    output wire        hdmi_nreset,
+    output wire hdmi_nreset,
     (* X_INTERFACE_INFO = "xilinx.com:signal:clock:1.0 hdmi_clk CLK" *)
     (* X_INTERFACE_PARAMETER = "FREQ_HZ 148500000" *)
-    output wire        hdmi_clk,
-    output wire        hdmi_hs,
-    output wire        hdmi_vs,
-    output wire        hdmi_de,
+    output wire hdmi_clk,
+    output wire hdmi_hs,
+    output wire hdmi_vs,
+    output wire hdmi_de,
     output wire [23:0] hdmi_d,
-    inout  wire        hdmi_scl,
-    inout  wire        hdmi_sda,
-    output wire        hdmi_init_done
+    inout wire hdmi_scl,
+    inout wire hdmi_sda,
+    output wire hdmi_init_done
 );
 
-    // -------------------------------------------------------------------------
     // 1. PCIe Reference Clock Buffer (IBUFDS_GTE2 Primitive)
-    // -------------------------------------------------------------------------
     wire pcie_ref_clk;
     IBUFDS_GTE2 u_ibufds_gte2 (
-        .I     (sys_clk_clk_p),
-        .IB    (sys_clk_clk_n),
-        .CEB   (1'b0),
-        .O     (pcie_ref_clk),
+        .I (sys_clk_clk_p),
+        .IB (sys_clk_clk_n),
+        .CEB (1'b0),
+        .O (pcie_ref_clk),
         .ODIV2 ()
     );
 
@@ -90,584 +85,569 @@ module top (
     wire usr_irq_req;
     wire usr_irq_ack;
 
-    // -------------------------------------------------------------------------
     // 2. AXI Bus Interfaces
-    // -------------------------------------------------------------------------
-    axi_lite_if #(.ADDR_W(32), .DATA_W(32))   xdma_rv_axil();
-    axi4_if     #(.ADDR_W(64), .DATA_W(64), .ID_W(4))   xdma_dwconv_axi();
-    axi4_if     #(.ADDR_W(32), .DATA_W(256), .ID_W(1))  dwconv_xbar_axi();
-    axi4_if     #(.ADDR_W(32), .DATA_W(256), .ID_W(1))  gpu_xbar_axi();
-    axi4_if     #(.ADDR_W(32), .DATA_W(256), .ID_W(2))  xbar_cdc_axi();
-    axi4_if     #(.ADDR_W(32), .DATA_W(256), .ID_W(2))  cdc_mig_axi();
+    axi_lite_if #(.ADDR_W(32), .DATA_W(32)) xdma_rv_axil();
+    axi4_if #(.ADDR_W(64), .DATA_W(64), .ID_W(4)) xdma_dwconv_axi();
+    axi4_if #(.ADDR_W(32), .DATA_W(256), .ID_W(1)) dwconv_xbar_axi();
+    axi4_if #(.ADDR_W(32), .DATA_W(256), .ID_W(1)) gpu_xbar_axi();
+    axi4_if #(.ADDR_W(32), .DATA_W(256), .ID_W(2)) xbar_cdc_axi();
+    axi4_if #(.ADDR_W(32), .DATA_W(256), .ID_W(2)) cdc_mig_axi();
 
 
     // Crossbar 2-Slave Response Signal Demux Vectors
-    wire [1:0]   xbar_s_bvalid;
-    wire [1:0]   xbar_s_rvalid;
-    wire [1:0]   xbar_s_awready;
-    wire [1:0]   xbar_s_wready;
-    wire [1:0]   xbar_s_arready;
+    wire [1:0] xbar_s_bvalid;
+    wire [1:0] xbar_s_rvalid;
+    wire [1:0] xbar_s_awready;
+    wire [1:0] xbar_s_wready;
+    wire [1:0] xbar_s_arready;
     wire [511:0] xbar_s_rdata;
     
-    wire [1:0]   xbar_s_bid;
-    wire [3:0]   xbar_s_bresp;
-    wire [1:0]   xbar_s_rid;
-    wire [3:0]   xbar_s_rresp;
-    wire [1:0]   xbar_s_rlast;
+    wire [1:0] xbar_s_bid;
+    wire [3:0] xbar_s_bresp;
+    wire [1:0] xbar_s_rid;
+    wire [3:0] xbar_s_rresp;
+    wire [1:0] xbar_s_rlast;
 
     // S00 = GPU Core (ID=1), S01 = XDMA (ID=4)
     assign gpu_xbar_axi.awready = xbar_s_awready[0];
     assign dwconv_xbar_axi.awready = xbar_s_awready[1];
-    assign gpu_xbar_axi.wready  = xbar_s_wready[0];
-    assign dwconv_xbar_axi.wready  = xbar_s_wready[1];
-    assign gpu_xbar_axi.bvalid  = xbar_s_bvalid[0];
-    assign dwconv_xbar_axi.bvalid  = xbar_s_bvalid[1];
+    assign gpu_xbar_axi.wready = xbar_s_wready[0];
+    assign dwconv_xbar_axi.wready = xbar_s_wready[1];
+    assign gpu_xbar_axi.bvalid = xbar_s_bvalid[0];
+    assign dwconv_xbar_axi.bvalid = xbar_s_bvalid[1];
     assign gpu_xbar_axi.arready = xbar_s_arready[0];
     assign dwconv_xbar_axi.arready = xbar_s_arready[1];
-    assign gpu_xbar_axi.rvalid  = xbar_s_rvalid[0];
-    assign dwconv_xbar_axi.rvalid  = xbar_s_rvalid[1];
+    assign gpu_xbar_axi.rvalid = xbar_s_rvalid[0];
+    assign dwconv_xbar_axi.rvalid = xbar_s_rvalid[1];
 
-    assign gpu_xbar_axi.rdata   = xbar_s_rdata[255:0];
-    assign dwconv_xbar_axi.rdata   = xbar_s_rdata[511:256];
+    assign gpu_xbar_axi.rdata = xbar_s_rdata[255:0];
+    assign dwconv_xbar_axi.rdata = xbar_s_rdata[511:256];
     
     // Crossbar packs [1:1] for S01 (1-bit) and [0:0] for S00 (1-bit)
-    assign gpu_xbar_axi.bid     = xbar_s_bid[0];
-    assign dwconv_xbar_axi.bid     = xbar_s_bid[1];
-    assign gpu_xbar_axi.bresp   = xbar_s_bresp[1:0];
-    assign dwconv_xbar_axi.bresp   = xbar_s_bresp[3:2];
+    assign gpu_xbar_axi.bid = xbar_s_bid[0];
+    assign dwconv_xbar_axi.bid = xbar_s_bid[1];
+    assign gpu_xbar_axi.bresp = xbar_s_bresp[1:0];
+    assign dwconv_xbar_axi.bresp = xbar_s_bresp[3:2];
     
-    assign gpu_xbar_axi.rid     = xbar_s_rid[0];
-    assign dwconv_xbar_axi.rid     = xbar_s_rid[1];
-    assign gpu_xbar_axi.rresp   = xbar_s_rresp[1:0];
-    assign dwconv_xbar_axi.rresp   = xbar_s_rresp[3:2];
-    assign gpu_xbar_axi.rlast   = xbar_s_rlast[0];
-    assign dwconv_xbar_axi.rlast   = xbar_s_rlast[1];
+    assign gpu_xbar_axi.rid = xbar_s_rid[0];
+    assign dwconv_xbar_axi.rid = xbar_s_rid[1];
+    assign gpu_xbar_axi.rresp = xbar_s_rresp[1:0];
+    assign dwconv_xbar_axi.rresp = xbar_s_rresp[3:2];
+    assign gpu_xbar_axi.rlast = xbar_s_rlast[0];
+    assign dwconv_xbar_axi.rlast = xbar_s_rlast[1];
 
     // Tie off floating ID inputs for S01 since dwidth_converter dropped them
-    assign dwconv_xbar_axi.awid    = 1'b0;
-    assign dwconv_xbar_axi.arid    = 1'b0;
+    assign dwconv_xbar_axi.awid = 1'b0;
+    assign dwconv_xbar_axi.arid = 1'b0;
 
-    // -------------------------------------------------------------------------
     // 3. PCIe XDMA Subsystem IP Instance (xdma_0)
-    // -------------------------------------------------------------------------
     xdma_0 u_xdma (
-        .sys_clk         (pcie_ref_clk),
-        .sys_rst_n       (sys_rst_n),
-        .user_lnk_up     (user_lnk_up),
-        .axi_aclk        (axi_aclk),
-        .axi_aresetn     (axi_aresetn),
+        .sys_clk (pcie_ref_clk),
+        .sys_rst_n (sys_rst_n),
+        .user_lnk_up (user_lnk_up),
+        .axi_aclk (axi_aclk),
+        .axi_aresetn (axi_aresetn),
 
         // PCIe PHY Transceiver Ports
-        .pci_exp_rxp     (pci_exp_rxp),
-        .pci_exp_rxn     (pci_exp_rxn),
-        .pci_exp_txp     (pci_exp_txp),
-        .pci_exp_txn     (pci_exp_txn),
+        .pci_exp_rxp (pci_exp_rxp),
+        .pci_exp_rxn (pci_exp_rxn),
+        .pci_exp_txp (pci_exp_txp),
+        .pci_exp_txn (pci_exp_txn),
 
         // Interrupt Ports
-        .usr_irq_req     (usr_irq_req),
-        .usr_irq_ack     (usr_irq_ack),
-        .msi_enable      (),
+        .usr_irq_req (usr_irq_req),
+        .usr_irq_ack (usr_irq_ack),
+        .msi_enable (),
         .msi_vector_width(),
 
         // BAR0 AXI4-Lite Control Bus (Mailbox 0x3F00)
-        .m_axil_awaddr   (xdma_rv_axil.awaddr),
-        .m_axil_awprot   (xdma_rv_axil.awprot),
-        .m_axil_awvalid  (xdma_rv_axil.awvalid),
-        .m_axil_awready  (xdma_rv_axil.awready),
-        .m_axil_wdata    (xdma_rv_axil.wdata),
-        .m_axil_wstrb    (xdma_rv_axil.wstrb),
-        .m_axil_wvalid   (xdma_rv_axil.wvalid),
-        .m_axil_wready   (xdma_rv_axil.wready),
-        .m_axil_bresp    (xdma_rv_axil.bresp),
-        .m_axil_bvalid   (xdma_rv_axil.bvalid),
-        .m_axil_bready   (xdma_rv_axil.bready),
-        .m_axil_araddr   (xdma_rv_axil.araddr),
-        .m_axil_arprot   (xdma_rv_axil.arprot),
-        .m_axil_arvalid  (xdma_rv_axil.arvalid),
-        .m_axil_arready  (xdma_rv_axil.arready),
-        .m_axil_rdata    (xdma_rv_axil.rdata),
-        .m_axil_rresp    (xdma_rv_axil.rresp),
-        .m_axil_rvalid   (xdma_rv_axil.rvalid),
-        .m_axil_rready   (xdma_rv_axil.rready),
+        .m_axil_awaddr (xdma_rv_axil.awaddr),
+        .m_axil_awprot (xdma_rv_axil.awprot),
+        .m_axil_awvalid (xdma_rv_axil.awvalid),
+        .m_axil_awready (xdma_rv_axil.awready),
+        .m_axil_wdata (xdma_rv_axil.wdata),
+        .m_axil_wstrb (xdma_rv_axil.wstrb),
+        .m_axil_wvalid (xdma_rv_axil.wvalid),
+        .m_axil_wready (xdma_rv_axil.wready),
+        .m_axil_bresp (xdma_rv_axil.bresp),
+        .m_axil_bvalid (xdma_rv_axil.bvalid),
+        .m_axil_bready (xdma_rv_axil.bready),
+        .m_axil_araddr (xdma_rv_axil.araddr),
+        .m_axil_arprot (xdma_rv_axil.arprot),
+        .m_axil_arvalid (xdma_rv_axil.arvalid),
+        .m_axil_arready (xdma_rv_axil.arready),
+        .m_axil_rdata (xdma_rv_axil.rdata),
+        .m_axil_rresp (xdma_rv_axil.rresp),
+        .m_axil_rvalid (xdma_rv_axil.rvalid),
+        .m_axil_rready (xdma_rv_axil.rready),
 
         // 64-bit AXI4-Full Master DMA Bus
-        .m_axi_awid      (xdma_dwconv_axi.awid),
-        .m_axi_awaddr    (xdma_dwconv_axi.awaddr),
-        .m_axi_awlen     (xdma_dwconv_axi.awlen),
-        .m_axi_awsize    (xdma_dwconv_axi.awsize),
-        .m_axi_awburst   (xdma_dwconv_axi.awburst),
-        .m_axi_awlock    (xdma_dwconv_axi.awlock),
-        .m_axi_awcache   (xdma_dwconv_axi.awcache),
-        .m_axi_awprot    (xdma_dwconv_axi.awprot),
-        // .m_axi_awqos     (xdma_dwconv_axi.awqos),
-        // .m_axi_awregion  (xdma_dwconv_axi.awregion),
-        .m_axi_awvalid   (xdma_dwconv_axi.awvalid),
-        .m_axi_awready   (xdma_dwconv_axi.awready),
-        .m_axi_wdata     (xdma_dwconv_axi.wdata),
-        .m_axi_wstrb     (xdma_dwconv_axi.wstrb),
-        .m_axi_wlast     (xdma_dwconv_axi.wlast),
-        .m_axi_wvalid    (xdma_dwconv_axi.wvalid),
-        .m_axi_wready    (xdma_dwconv_axi.wready),
-        .m_axi_bid       (xdma_dwconv_axi.bid),
-        .m_axi_bresp     (xdma_dwconv_axi.bresp),
-        .m_axi_bvalid    (xdma_dwconv_axi.bvalid),
-        .m_axi_bready    (xdma_dwconv_axi.bready),
-        .m_axi_arid      (xdma_dwconv_axi.arid),
-        .m_axi_araddr    (xdma_dwconv_axi.araddr),
-        .m_axi_arlen     (xdma_dwconv_axi.arlen),
-        .m_axi_arsize    (xdma_dwconv_axi.arsize),
-        .m_axi_arburst   (xdma_dwconv_axi.arburst),
-        .m_axi_arlock    (xdma_dwconv_axi.arlock),
-        .m_axi_arcache   (xdma_dwconv_axi.arcache),
-        .m_axi_arprot    (xdma_dwconv_axi.arprot),
-        // .m_axi_arqos     (xdma_dwconv_axi.arqos),
-        // .m_axi_arregion  (xdma_dwconv_axi.arregion),
-        .m_axi_arvalid   (xdma_dwconv_axi.arvalid),
-        .m_axi_arready   (xdma_dwconv_axi.arready),
-        .m_axi_rid       (xdma_dwconv_axi.rid),
-        .m_axi_rdata     (xdma_dwconv_axi.rdata),
-        .m_axi_rresp     (xdma_dwconv_axi.rresp),
-        .m_axi_rlast     (xdma_dwconv_axi.rlast),
-        .m_axi_rvalid    (xdma_dwconv_axi.rvalid),
-        .m_axi_rready    (xdma_dwconv_axi.rready),
+        .m_axi_awid (xdma_dwconv_axi.awid),
+        .m_axi_awaddr (xdma_dwconv_axi.awaddr),
+        .m_axi_awlen (xdma_dwconv_axi.awlen),
+        .m_axi_awsize (xdma_dwconv_axi.awsize),
+        .m_axi_awburst (xdma_dwconv_axi.awburst),
+        .m_axi_awlock (xdma_dwconv_axi.awlock),
+        .m_axi_awcache (xdma_dwconv_axi.awcache),
+        .m_axi_awprot (xdma_dwconv_axi.awprot),
+        // .m_axi_awqos (xdma_dwconv_axi.awqos),
+        // .m_axi_awregion (xdma_dwconv_axi.awregion),
+        .m_axi_awvalid (xdma_dwconv_axi.awvalid),
+        .m_axi_awready (xdma_dwconv_axi.awready),
+        .m_axi_wdata (xdma_dwconv_axi.wdata),
+        .m_axi_wstrb (xdma_dwconv_axi.wstrb),
+        .m_axi_wlast (xdma_dwconv_axi.wlast),
+        .m_axi_wvalid (xdma_dwconv_axi.wvalid),
+        .m_axi_wready (xdma_dwconv_axi.wready),
+        .m_axi_bid (xdma_dwconv_axi.bid),
+        .m_axi_bresp (xdma_dwconv_axi.bresp),
+        .m_axi_bvalid (xdma_dwconv_axi.bvalid),
+        .m_axi_bready (xdma_dwconv_axi.bready),
+        .m_axi_arid (xdma_dwconv_axi.arid),
+        .m_axi_araddr (xdma_dwconv_axi.araddr),
+        .m_axi_arlen (xdma_dwconv_axi.arlen),
+        .m_axi_arsize (xdma_dwconv_axi.arsize),
+        .m_axi_arburst (xdma_dwconv_axi.arburst),
+        .m_axi_arlock (xdma_dwconv_axi.arlock),
+        .m_axi_arcache (xdma_dwconv_axi.arcache),
+        .m_axi_arprot (xdma_dwconv_axi.arprot),
+        // .m_axi_arqos (xdma_dwconv_axi.arqos),
+        // .m_axi_arregion (xdma_dwconv_axi.arregion),
+        .m_axi_arvalid (xdma_dwconv_axi.arvalid),
+        .m_axi_arready (xdma_dwconv_axi.arready),
+        .m_axi_rid (xdma_dwconv_axi.rid),
+        .m_axi_rdata (xdma_dwconv_axi.rdata),
+        .m_axi_rresp (xdma_dwconv_axi.rresp),
+        .m_axi_rlast (xdma_dwconv_axi.rlast),
+        .m_axi_rvalid (xdma_dwconv_axi.rvalid),
+        .m_axi_rready (xdma_dwconv_axi.rready),
 
         // Tie off unused Configuration Management Interface
-        .cfg_mgmt_addr   (19'b0),
-        .cfg_mgmt_write  (1'b0),
+        .cfg_mgmt_addr (19'b0),
+        .cfg_mgmt_write (1'b0),
         .cfg_mgmt_write_data (32'b0),
         .cfg_mgmt_byte_enable (4'b0),
-        .cfg_mgmt_read   (1'b0),
+        .cfg_mgmt_read (1'b0),
         .cfg_mgmt_read_data (),
         .cfg_mgmt_read_write_done (),
         .cfg_mgmt_type1_cfg_reg_access (1'b0)
     );
 
-    // -------------------------------------------------------------------------
     // 4. 64-bit to 256-bit AXI Data Width Converter Instance (axi_dwidth_converter_0)
-    // -------------------------------------------------------------------------
     // this width convertor is configured to have SI_ID_WIDTH = 4
     // otherwise awid, bid, arid, rid wont be generated
     axi_dwidth_converter_0 u_dwidth_conv (
-        .s_axi_aclk     (axi_aclk),
-        .s_axi_aresetn  (axi_aresetn),
+        .s_axi_aclk (axi_aclk),
+        .s_axi_aresetn (axi_aresetn),
 
         // 64-bit Slave Interface from XDMA
-        .s_axi_awid     (xdma_dwconv_axi.awid),
-        .s_axi_awaddr   (xdma_dwconv_axi.awaddr[31:0]),
-        .s_axi_awlen    (xdma_dwconv_axi.awlen),
-        .s_axi_awsize   (xdma_dwconv_axi.awsize),
-        .s_axi_awburst  (xdma_dwconv_axi.awburst),
-        .s_axi_awlock   (xdma_dwconv_axi.awlock),
-        .s_axi_awcache  (xdma_dwconv_axi.awcache),
-        .s_axi_awprot   (xdma_dwconv_axi.awprot),
-        .s_axi_awqos    (4'b0), // xdma does not support QoS
+        .s_axi_awid (xdma_dwconv_axi.awid),
+        .s_axi_awaddr (xdma_dwconv_axi.awaddr[31:0]),
+        .s_axi_awlen (xdma_dwconv_axi.awlen),
+        .s_axi_awsize (xdma_dwconv_axi.awsize),
+        .s_axi_awburst (xdma_dwconv_axi.awburst),
+        .s_axi_awlock (xdma_dwconv_axi.awlock),
+        .s_axi_awcache (xdma_dwconv_axi.awcache),
+        .s_axi_awprot (xdma_dwconv_axi.awprot),
+        .s_axi_awqos (4'b0), // xdma does not support QoS
         .s_axi_awregion (4'b0), // xdma does not support region
-        .s_axi_awvalid  (xdma_dwconv_axi.awvalid),
-        .s_axi_awready  (xdma_dwconv_axi.awready),
-        .s_axi_wdata    (xdma_dwconv_axi.wdata),
-        .s_axi_wstrb    (xdma_dwconv_axi.wstrb),
-        .s_axi_wlast    (xdma_dwconv_axi.wlast),
-        .s_axi_wvalid   (xdma_dwconv_axi.wvalid),
-        .s_axi_wready   (xdma_dwconv_axi.wready),
-        .s_axi_bid      (xdma_dwconv_axi.bid),
-        .s_axi_bresp    (xdma_dwconv_axi.bresp),
-        .s_axi_bvalid   (xdma_dwconv_axi.bvalid),
-        .s_axi_bready   (xdma_dwconv_axi.bready),
-        .s_axi_arid     (xdma_dwconv_axi.arid),
-        .s_axi_araddr   (xdma_dwconv_axi.araddr[31:0]),
-        .s_axi_arlen    (xdma_dwconv_axi.arlen),
-        .s_axi_arsize   (xdma_dwconv_axi.arsize),
-        .s_axi_arburst  (xdma_dwconv_axi.arburst),
-        .s_axi_arlock   (xdma_dwconv_axi.arlock),
-        .s_axi_arcache  (xdma_dwconv_axi.arcache),
-        .s_axi_arprot   (xdma_dwconv_axi.arprot),
-        .s_axi_arqos    (4'b0), // xdma does not support QoS
+        .s_axi_awvalid (xdma_dwconv_axi.awvalid),
+        .s_axi_awready (xdma_dwconv_axi.awready),
+        .s_axi_wdata (xdma_dwconv_axi.wdata),
+        .s_axi_wstrb (xdma_dwconv_axi.wstrb),
+        .s_axi_wlast (xdma_dwconv_axi.wlast),
+        .s_axi_wvalid (xdma_dwconv_axi.wvalid),
+        .s_axi_wready (xdma_dwconv_axi.wready),
+        .s_axi_bid (xdma_dwconv_axi.bid),
+        .s_axi_bresp (xdma_dwconv_axi.bresp),
+        .s_axi_bvalid (xdma_dwconv_axi.bvalid),
+        .s_axi_bready (xdma_dwconv_axi.bready),
+        .s_axi_arid (xdma_dwconv_axi.arid),
+        .s_axi_araddr (xdma_dwconv_axi.araddr[31:0]),
+        .s_axi_arlen (xdma_dwconv_axi.arlen),
+        .s_axi_arsize (xdma_dwconv_axi.arsize),
+        .s_axi_arburst (xdma_dwconv_axi.arburst),
+        .s_axi_arlock (xdma_dwconv_axi.arlock),
+        .s_axi_arcache (xdma_dwconv_axi.arcache),
+        .s_axi_arprot (xdma_dwconv_axi.arprot),
+        .s_axi_arqos (4'b0), // xdma does not support QoS
         .s_axi_arregion (4'b0), // xdma does not support region
-        .s_axi_arvalid  (xdma_dwconv_axi.arvalid),
-        .s_axi_arready  (xdma_dwconv_axi.arready),
-        .s_axi_rid      (xdma_dwconv_axi.rid),
-        .s_axi_rdata    (xdma_dwconv_axi.rdata),
-        .s_axi_rresp    (xdma_dwconv_axi.rresp),
-        .s_axi_rlast    (xdma_dwconv_axi.rlast),
-        .s_axi_rvalid   (xdma_dwconv_axi.rvalid),
-        .s_axi_rready   (xdma_dwconv_axi.rready),
+        .s_axi_arvalid (xdma_dwconv_axi.arvalid),
+        .s_axi_arready (xdma_dwconv_axi.arready),
+        .s_axi_rid (xdma_dwconv_axi.rid),
+        .s_axi_rdata (xdma_dwconv_axi.rdata),
+        .s_axi_rresp (xdma_dwconv_axi.rresp),
+        .s_axi_rlast (xdma_dwconv_axi.rlast),
+        .s_axi_rvalid (xdma_dwconv_axi.rvalid),
+        .s_axi_rready (xdma_dwconv_axi.rready),
 
         // 256-bit Master Interface to Crossbar S00
         // axi_dwidth_converter will force m_axi_awid to 1'b0 downstream with internal mapping table
         // so m_axi_awid, bid, arid, rid wont exist
-        // .m_axi_awid     (dwconv_xbar_axi.awid),
-        .m_axi_awaddr   (dwconv_xbar_axi.awaddr),
-        .m_axi_awlen    (dwconv_xbar_axi.awlen),
-        .m_axi_awsize   (dwconv_xbar_axi.awsize),
-        .m_axi_awburst  (dwconv_xbar_axi.awburst),
-        .m_axi_awlock   (dwconv_xbar_axi.awlock),
-        .m_axi_awcache  (dwconv_xbar_axi.awcache),
-        .m_axi_awprot   (dwconv_xbar_axi.awprot),
-        .m_axi_awqos    (dwconv_xbar_axi.awqos),
+        // .m_axi_awid (dwconv_xbar_axi.awid),
+        .m_axi_awaddr (dwconv_xbar_axi.awaddr),
+        .m_axi_awlen (dwconv_xbar_axi.awlen),
+        .m_axi_awsize (dwconv_xbar_axi.awsize),
+        .m_axi_awburst (dwconv_xbar_axi.awburst),
+        .m_axi_awlock (dwconv_xbar_axi.awlock),
+        .m_axi_awcache (dwconv_xbar_axi.awcache),
+        .m_axi_awprot (dwconv_xbar_axi.awprot),
+        .m_axi_awqos (dwconv_xbar_axi.awqos),
         .m_axi_awregion (dwconv_xbar_axi.awregion),
-        .m_axi_awvalid  (dwconv_xbar_axi.awvalid),
-        .m_axi_awready  (dwconv_xbar_axi.awready),
-        .m_axi_wdata    (dwconv_xbar_axi.wdata),
-        .m_axi_wstrb    (dwconv_xbar_axi.wstrb),
-        .m_axi_wlast    (dwconv_xbar_axi.wlast),
-        .m_axi_wvalid   (dwconv_xbar_axi.wvalid),
-        .m_axi_wready   (dwconv_xbar_axi.wready),
-        // .m_axi_bid      (dwconv_xbar_axi.bid),
-        .m_axi_bresp    (dwconv_xbar_axi.bresp),
-        .m_axi_bvalid   (dwconv_xbar_axi.bvalid),
-        .m_axi_bready   (dwconv_xbar_axi.bready),
-        // .m_axi_arid     (dwconv_xbar_axi.arid),
-        .m_axi_araddr   (dwconv_xbar_axi.araddr),
-        .m_axi_arlen    (dwconv_xbar_axi.arlen),
-        .m_axi_arsize   (dwconv_xbar_axi.arsize),
-        .m_axi_arburst  (dwconv_xbar_axi.arburst),
-        .m_axi_arlock   (dwconv_xbar_axi.arlock),
-        .m_axi_arcache  (dwconv_xbar_axi.arcache),
-        .m_axi_arprot   (dwconv_xbar_axi.arprot),
-        .m_axi_arqos    (dwconv_xbar_axi.arqos),
+        .m_axi_awvalid (dwconv_xbar_axi.awvalid),
+        .m_axi_awready (dwconv_xbar_axi.awready),
+        .m_axi_wdata (dwconv_xbar_axi.wdata),
+        .m_axi_wstrb (dwconv_xbar_axi.wstrb),
+        .m_axi_wlast (dwconv_xbar_axi.wlast),
+        .m_axi_wvalid (dwconv_xbar_axi.wvalid),
+        .m_axi_wready (dwconv_xbar_axi.wready),
+        // .m_axi_bid (dwconv_xbar_axi.bid),
+        .m_axi_bresp (dwconv_xbar_axi.bresp),
+        .m_axi_bvalid (dwconv_xbar_axi.bvalid),
+        .m_axi_bready (dwconv_xbar_axi.bready),
+        // .m_axi_arid (dwconv_xbar_axi.arid),
+        .m_axi_araddr (dwconv_xbar_axi.araddr),
+        .m_axi_arlen (dwconv_xbar_axi.arlen),
+        .m_axi_arsize (dwconv_xbar_axi.arsize),
+        .m_axi_arburst (dwconv_xbar_axi.arburst),
+        .m_axi_arlock (dwconv_xbar_axi.arlock),
+        .m_axi_arcache (dwconv_xbar_axi.arcache),
+        .m_axi_arprot (dwconv_xbar_axi.arprot),
+        .m_axi_arqos (dwconv_xbar_axi.arqos),
         .m_axi_arregion (dwconv_xbar_axi.arregion),
-        .m_axi_arvalid  (dwconv_xbar_axi.arvalid),
-        .m_axi_arready  (dwconv_xbar_axi.arready),
-        // .m_axi_rid      (dwconv_xbar_axi.rid),
-        .m_axi_rdata    (dwconv_xbar_axi.rdata),
-        .m_axi_rresp    (dwconv_xbar_axi.rresp),
-        .m_axi_rlast    (dwconv_xbar_axi.rlast),
-        .m_axi_rvalid   (dwconv_xbar_axi.rvalid),
-        .m_axi_rready   (dwconv_xbar_axi.rready)
+        .m_axi_arvalid (dwconv_xbar_axi.arvalid),
+        .m_axi_arready (dwconv_xbar_axi.arready),
+        // .m_axi_rid (dwconv_xbar_axi.rid),
+        .m_axi_rdata (dwconv_xbar_axi.rdata),
+        .m_axi_rresp (dwconv_xbar_axi.rresp),
+        .m_axi_rlast (dwconv_xbar_axi.rlast),
+        .m_axi_rvalid (dwconv_xbar_axi.rvalid),
+        .m_axi_rready (dwconv_xbar_axi.rready)
     );
 
-    // -------------------------------------------------------------------------
     // 5. 256-bit 2-Slave to 1-Master AXI Crossbar Interconnect Instance (axi_crossbar_0)
-    // -------------------------------------------------------------------------
     axi_crossbar_0 u_crossbar (
-        .aclk           (axi_aclk),
-        .aresetn        (axi_aresetn),
+        .aclk (axi_aclk),
+        .aresetn (axi_aresetn),
         
         // The max thread id width is 1 (S01_ID_W=1, S00_ID_W=1), 
         // so Crossbar output xbar_cdc_axi and DDR3 cdc_mig_axi id_w will be max(1,1) + 1 = 2
         // Slave Ports (S00 = GPU Core (ID=1), S01 = XDMA (ID=4))
         // ({high S01, low S00}) 
-        .s_axi_awid     ({dwconv_xbar_axi.awid, gpu_xbar_axi.awid}),
-        .s_axi_awaddr   ({dwconv_xbar_axi.awaddr, gpu_xbar_axi.awaddr}),
-        .s_axi_awlen    ({dwconv_xbar_axi.awlen, gpu_xbar_axi.awlen}),
-        .s_axi_awsize   ({dwconv_xbar_axi.awsize, gpu_xbar_axi.awsize}),
-        .s_axi_awburst  ({dwconv_xbar_axi.awburst, gpu_xbar_axi.awburst}),
-        .s_axi_awlock   ({dwconv_xbar_axi.awlock, gpu_xbar_axi.awlock}),
-        .s_axi_awcache  ({dwconv_xbar_axi.awcache, gpu_xbar_axi.awcache}),
-        .s_axi_awprot   ({dwconv_xbar_axi.awprot, gpu_xbar_axi.awprot}),
-        .s_axi_awqos    ({dwconv_xbar_axi.awqos, gpu_xbar_axi.awqos}),
+        .s_axi_awid ({dwconv_xbar_axi.awid, gpu_xbar_axi.awid}),
+        .s_axi_awaddr ({dwconv_xbar_axi.awaddr, gpu_xbar_axi.awaddr}),
+        .s_axi_awlen ({dwconv_xbar_axi.awlen, gpu_xbar_axi.awlen}),
+        .s_axi_awsize ({dwconv_xbar_axi.awsize, gpu_xbar_axi.awsize}),
+        .s_axi_awburst ({dwconv_xbar_axi.awburst, gpu_xbar_axi.awburst}),
+        .s_axi_awlock ({dwconv_xbar_axi.awlock, gpu_xbar_axi.awlock}),
+        .s_axi_awcache ({dwconv_xbar_axi.awcache, gpu_xbar_axi.awcache}),
+        .s_axi_awprot ({dwconv_xbar_axi.awprot, gpu_xbar_axi.awprot}),
+        .s_axi_awqos ({dwconv_xbar_axi.awqos, gpu_xbar_axi.awqos}),
         // .s_axi_awregion ({dwconv_xbar_axi.awregion, gpu_xbar_axi.awregion}), // region is omitted in crossbar
-        .s_axi_awvalid  ({dwconv_xbar_axi.awvalid, gpu_xbar_axi.awvalid}),
-        .s_axi_awready  (xbar_s_awready),
+        .s_axi_awvalid ({dwconv_xbar_axi.awvalid, gpu_xbar_axi.awvalid}),
+        .s_axi_awready (xbar_s_awready),
 
-        .s_axi_wdata    ({dwconv_xbar_axi.wdata, gpu_xbar_axi.wdata}),
-        .s_axi_wstrb    ({dwconv_xbar_axi.wstrb, gpu_xbar_axi.wstrb}),
-        .s_axi_wlast    ({dwconv_xbar_axi.wlast, gpu_xbar_axi.wlast}),
-        .s_axi_wvalid   ({dwconv_xbar_axi.wvalid, gpu_xbar_axi.wvalid}),
-        .s_axi_wready   (xbar_s_wready),
+        .s_axi_wdata ({dwconv_xbar_axi.wdata, gpu_xbar_axi.wdata}),
+        .s_axi_wstrb ({dwconv_xbar_axi.wstrb, gpu_xbar_axi.wstrb}),
+        .s_axi_wlast ({dwconv_xbar_axi.wlast, gpu_xbar_axi.wlast}),
+        .s_axi_wvalid ({dwconv_xbar_axi.wvalid, gpu_xbar_axi.wvalid}),
+        .s_axi_wready (xbar_s_wready),
 
-        .s_axi_bid      (xbar_s_bid),
-        .s_axi_bresp    (xbar_s_bresp),
-        .s_axi_bvalid   (xbar_s_bvalid),
-        .s_axi_bready   ({dwconv_xbar_axi.bready, gpu_xbar_axi.bready}),
+        .s_axi_bid (xbar_s_bid),
+        .s_axi_bresp (xbar_s_bresp),
+        .s_axi_bvalid (xbar_s_bvalid),
+        .s_axi_bready ({dwconv_xbar_axi.bready, gpu_xbar_axi.bready}),
 
-        .s_axi_arid     ({dwconv_xbar_axi.arid, gpu_xbar_axi.arid}),
-        .s_axi_araddr   ({dwconv_xbar_axi.araddr, gpu_xbar_axi.araddr}),
-        .s_axi_arlen    ({dwconv_xbar_axi.arlen, gpu_xbar_axi.arlen}),
-        .s_axi_arsize   ({dwconv_xbar_axi.arsize, gpu_xbar_axi.arsize}),
-        .s_axi_arburst  ({dwconv_xbar_axi.arburst, gpu_xbar_axi.arburst}),
-        .s_axi_arlock   ({dwconv_xbar_axi.arlock, gpu_xbar_axi.arlock}),
-        .s_axi_arcache  ({dwconv_xbar_axi.arcache, gpu_xbar_axi.arcache}),
-        .s_axi_arprot   ({dwconv_xbar_axi.arprot, gpu_xbar_axi.arprot}),
-        .s_axi_arqos    ({dwconv_xbar_axi.arqos, gpu_xbar_axi.arqos}),
+        .s_axi_arid ({dwconv_xbar_axi.arid, gpu_xbar_axi.arid}),
+        .s_axi_araddr ({dwconv_xbar_axi.araddr, gpu_xbar_axi.araddr}),
+        .s_axi_arlen ({dwconv_xbar_axi.arlen, gpu_xbar_axi.arlen}),
+        .s_axi_arsize ({dwconv_xbar_axi.arsize, gpu_xbar_axi.arsize}),
+        .s_axi_arburst ({dwconv_xbar_axi.arburst, gpu_xbar_axi.arburst}),
+        .s_axi_arlock ({dwconv_xbar_axi.arlock, gpu_xbar_axi.arlock}),
+        .s_axi_arcache ({dwconv_xbar_axi.arcache, gpu_xbar_axi.arcache}),
+        .s_axi_arprot ({dwconv_xbar_axi.arprot, gpu_xbar_axi.arprot}),
+        .s_axi_arqos ({dwconv_xbar_axi.arqos, gpu_xbar_axi.arqos}),
         // .s_axi_arregion ({dwconv_xbar_axi.arregion, gpu_xbar_axi.arregion}), // region is omitted in crossbar
-        .s_axi_arvalid  ({dwconv_xbar_axi.arvalid, gpu_xbar_axi.arvalid}),
-        .s_axi_arready  (xbar_s_arready),
+        .s_axi_arvalid ({dwconv_xbar_axi.arvalid, gpu_xbar_axi.arvalid}),
+        .s_axi_arready (xbar_s_arready),
 
-        .s_axi_rid      (xbar_s_rid),
-        .s_axi_rdata    (xbar_s_rdata),
-        .s_axi_rresp    (xbar_s_rresp),
-        .s_axi_rlast    (xbar_s_rlast),
-        .s_axi_rvalid   (xbar_s_rvalid),
-        .s_axi_rready   ({dwconv_xbar_axi.rready, gpu_xbar_axi.rready}),
+        .s_axi_rid (xbar_s_rid),
+        .s_axi_rdata (xbar_s_rdata),
+        .s_axi_rresp (xbar_s_rresp),
+        .s_axi_rlast (xbar_s_rlast),
+        .s_axi_rvalid (xbar_s_rvalid),
+        .s_axi_rready ({dwconv_xbar_axi.rready, gpu_xbar_axi.rready}),
 
         // Master Port 0 (M00: 256-bit to MIG DDR3 S_AXI)
-        .m_axi_awid      (xbar_cdc_axi.awid),
-        .m_axi_awaddr    (xbar_cdc_axi.awaddr),
-        .m_axi_awlen     (xbar_cdc_axi.awlen),
-        .m_axi_awsize    (xbar_cdc_axi.awsize),
-        .m_axi_awburst   (xbar_cdc_axi.awburst),
-        .m_axi_awlock    (xbar_cdc_axi.awlock),
-        .m_axi_awcache   (xbar_cdc_axi.awcache),
-        .m_axi_awprot    (xbar_cdc_axi.awprot),
-        .m_axi_awqos     (xbar_cdc_axi.awqos),
-        .m_axi_awregion  (xbar_cdc_axi.awregion),
-        .m_axi_awvalid   (xbar_cdc_axi.awvalid),
-        .m_axi_awready   (xbar_cdc_axi.awready),
-        .m_axi_wdata     (xbar_cdc_axi.wdata),
-        .m_axi_wstrb     (xbar_cdc_axi.wstrb),
-        .m_axi_wlast     (xbar_cdc_axi.wlast),
-        .m_axi_wvalid    (xbar_cdc_axi.wvalid),
-        .m_axi_wready    (xbar_cdc_axi.wready),
-        .m_axi_bid       (xbar_cdc_axi.bid),
-        .m_axi_bresp     (xbar_cdc_axi.bresp),
-        .m_axi_bvalid    (xbar_cdc_axi.bvalid),
-        .m_axi_bready    (xbar_cdc_axi.bready),
-        .m_axi_arid      (xbar_cdc_axi.arid),
-        .m_axi_araddr    (xbar_cdc_axi.araddr),
-        .m_axi_arlen     (xbar_cdc_axi.arlen),
-        .m_axi_arsize    (xbar_cdc_axi.arsize),
-        .m_axi_arburst   (xbar_cdc_axi.arburst),
-        .m_axi_arlock    (xbar_cdc_axi.arlock),
-        .m_axi_arcache   (xbar_cdc_axi.arcache),
-        .m_axi_arprot    (xbar_cdc_axi.arprot),
-        .m_axi_arqos     (xbar_cdc_axi.arqos),
-        .m_axi_arregion  (xbar_cdc_axi.arregion),
-        .m_axi_arvalid   (xbar_cdc_axi.arvalid),
-        .m_axi_arready   (xbar_cdc_axi.arready),
-        .m_axi_rid       (xbar_cdc_axi.rid),
-        .m_axi_rdata     (xbar_cdc_axi.rdata),
-        .m_axi_rresp     (xbar_cdc_axi.rresp),
-        .m_axi_rlast     (xbar_cdc_axi.rlast),
-        .m_axi_rvalid    (xbar_cdc_axi.rvalid),
-        .m_axi_rready    (xbar_cdc_axi.rready)
+        .m_axi_awid (xbar_cdc_axi.awid),
+        .m_axi_awaddr (xbar_cdc_axi.awaddr),
+        .m_axi_awlen (xbar_cdc_axi.awlen),
+        .m_axi_awsize (xbar_cdc_axi.awsize),
+        .m_axi_awburst (xbar_cdc_axi.awburst),
+        .m_axi_awlock (xbar_cdc_axi.awlock),
+        .m_axi_awcache (xbar_cdc_axi.awcache),
+        .m_axi_awprot (xbar_cdc_axi.awprot),
+        .m_axi_awqos (xbar_cdc_axi.awqos),
+        .m_axi_awregion (xbar_cdc_axi.awregion),
+        .m_axi_awvalid (xbar_cdc_axi.awvalid),
+        .m_axi_awready (xbar_cdc_axi.awready),
+        .m_axi_wdata (xbar_cdc_axi.wdata),
+        .m_axi_wstrb (xbar_cdc_axi.wstrb),
+        .m_axi_wlast (xbar_cdc_axi.wlast),
+        .m_axi_wvalid (xbar_cdc_axi.wvalid),
+        .m_axi_wready (xbar_cdc_axi.wready),
+        .m_axi_bid (xbar_cdc_axi.bid),
+        .m_axi_bresp (xbar_cdc_axi.bresp),
+        .m_axi_bvalid (xbar_cdc_axi.bvalid),
+        .m_axi_bready (xbar_cdc_axi.bready),
+        .m_axi_arid (xbar_cdc_axi.arid),
+        .m_axi_araddr (xbar_cdc_axi.araddr),
+        .m_axi_arlen (xbar_cdc_axi.arlen),
+        .m_axi_arsize (xbar_cdc_axi.arsize),
+        .m_axi_arburst (xbar_cdc_axi.arburst),
+        .m_axi_arlock (xbar_cdc_axi.arlock),
+        .m_axi_arcache (xbar_cdc_axi.arcache),
+        .m_axi_arprot (xbar_cdc_axi.arprot),
+        .m_axi_arqos (xbar_cdc_axi.arqos),
+        .m_axi_arregion (xbar_cdc_axi.arregion),
+        .m_axi_arvalid (xbar_cdc_axi.arvalid),
+        .m_axi_arready (xbar_cdc_axi.arready),
+        .m_axi_rid (xbar_cdc_axi.rid),
+        .m_axi_rdata (xbar_cdc_axi.rdata),
+        .m_axi_rresp (xbar_cdc_axi.rresp),
+        .m_axi_rlast (xbar_cdc_axi.rlast),
+        .m_axi_rvalid (xbar_cdc_axi.rvalid),
+        .m_axi_rready (xbar_cdc_axi.rready)
     );
 
-    // -------------------------------------------------------------------------
     // 5.5 AXI Clock Converter (axi_aclk -> ui_clk)
-    // -------------------------------------------------------------------------
     wire ui_clk;
     wire ui_clk_sync_rst;
     wire ui_clk_aresetn = ~ui_clk_sync_rst;
     // since it is connect to crossbar M00, so its ip setting follows crossbar M00
     // data width is 256-bit, thread ID width is 2
     axi_clock_converter_0 u_axi_cdc (
-        .s_axi_aclk    (axi_aclk),
+        .s_axi_aclk (axi_aclk),
         .s_axi_aresetn (axi_aresetn),
-        .m_axi_aclk    (ui_clk),
+        .m_axi_aclk (ui_clk),
         .m_axi_aresetn (ui_clk_aresetn),
 
         // Slave Port (from Crossbar)
-        .s_axi_awid    (xbar_cdc_axi.awid),
-        .s_axi_awaddr  (xbar_cdc_axi.awaddr),
-        .s_axi_awlen   (xbar_cdc_axi.awlen),
-        .s_axi_awsize  (xbar_cdc_axi.awsize),
+        .s_axi_awid (xbar_cdc_axi.awid),
+        .s_axi_awaddr (xbar_cdc_axi.awaddr),
+        .s_axi_awlen (xbar_cdc_axi.awlen),
+        .s_axi_awsize (xbar_cdc_axi.awsize),
         .s_axi_awburst (xbar_cdc_axi.awburst),
-        .s_axi_awlock  (xbar_cdc_axi.awlock),
+        .s_axi_awlock (xbar_cdc_axi.awlock),
         .s_axi_awcache (xbar_cdc_axi.awcache),
-        .s_axi_awprot  (xbar_cdc_axi.awprot),
-        .s_axi_awqos   (xbar_cdc_axi.awqos),
+        .s_axi_awprot (xbar_cdc_axi.awprot),
+        .s_axi_awqos (xbar_cdc_axi.awqos),
         .s_axi_awregion(xbar_cdc_axi.awregion),
         .s_axi_awvalid (xbar_cdc_axi.awvalid),
         .s_axi_awready (xbar_cdc_axi.awready),
-        .s_axi_wdata   (xbar_cdc_axi.wdata),
-        .s_axi_wstrb   (xbar_cdc_axi.wstrb),
-        .s_axi_wlast   (xbar_cdc_axi.wlast),
-        .s_axi_wvalid  (xbar_cdc_axi.wvalid),
-        .s_axi_wready  (xbar_cdc_axi.wready),
-        .s_axi_bid     (xbar_cdc_axi.bid),
-        .s_axi_bresp   (xbar_cdc_axi.bresp),
-        .s_axi_bvalid  (xbar_cdc_axi.bvalid),
-        .s_axi_bready  (xbar_cdc_axi.bready),
-        .s_axi_arid    (xbar_cdc_axi.arid),
-        .s_axi_araddr  (xbar_cdc_axi.araddr),
-        .s_axi_arlen   (xbar_cdc_axi.arlen),
-        .s_axi_arsize  (xbar_cdc_axi.arsize),
+        .s_axi_wdata (xbar_cdc_axi.wdata),
+        .s_axi_wstrb (xbar_cdc_axi.wstrb),
+        .s_axi_wlast (xbar_cdc_axi.wlast),
+        .s_axi_wvalid (xbar_cdc_axi.wvalid),
+        .s_axi_wready (xbar_cdc_axi.wready),
+        .s_axi_bid (xbar_cdc_axi.bid),
+        .s_axi_bresp (xbar_cdc_axi.bresp),
+        .s_axi_bvalid (xbar_cdc_axi.bvalid),
+        .s_axi_bready (xbar_cdc_axi.bready),
+        .s_axi_arid (xbar_cdc_axi.arid),
+        .s_axi_araddr (xbar_cdc_axi.araddr),
+        .s_axi_arlen (xbar_cdc_axi.arlen),
+        .s_axi_arsize (xbar_cdc_axi.arsize),
         .s_axi_arburst (xbar_cdc_axi.arburst),
-        .s_axi_arlock  (xbar_cdc_axi.arlock),
+        .s_axi_arlock (xbar_cdc_axi.arlock),
         .s_axi_arcache (xbar_cdc_axi.arcache),
-        .s_axi_arprot  (xbar_cdc_axi.arprot),
-        .s_axi_arqos   (xbar_cdc_axi.arqos),
+        .s_axi_arprot (xbar_cdc_axi.arprot),
+        .s_axi_arqos (xbar_cdc_axi.arqos),
         .s_axi_arregion(xbar_cdc_axi.arregion),
         .s_axi_arvalid (xbar_cdc_axi.arvalid),
         .s_axi_arready (xbar_cdc_axi.arready),
-        .s_axi_rid     (xbar_cdc_axi.rid),
-        .s_axi_rdata   (xbar_cdc_axi.rdata),
-        .s_axi_rresp   (xbar_cdc_axi.rresp),
-        .s_axi_rlast   (xbar_cdc_axi.rlast),
-        .s_axi_rvalid  (xbar_cdc_axi.rvalid),
-        .s_axi_rready  (xbar_cdc_axi.rready),
+        .s_axi_rid (xbar_cdc_axi.rid),
+        .s_axi_rdata (xbar_cdc_axi.rdata),
+        .s_axi_rresp (xbar_cdc_axi.rresp),
+        .s_axi_rlast (xbar_cdc_axi.rlast),
+        .s_axi_rvalid (xbar_cdc_axi.rvalid),
+        .s_axi_rready (xbar_cdc_axi.rready),
 
         // Master Port (to MIG DDR3)
-        .m_axi_awid    (cdc_mig_axi.awid),
-        .m_axi_awaddr  (cdc_mig_axi.awaddr),
-        .m_axi_awlen   (cdc_mig_axi.awlen),
-        .m_axi_awsize  (cdc_mig_axi.awsize),
+        .m_axi_awid (cdc_mig_axi.awid),
+        .m_axi_awaddr (cdc_mig_axi.awaddr),
+        .m_axi_awlen (cdc_mig_axi.awlen),
+        .m_axi_awsize (cdc_mig_axi.awsize),
         .m_axi_awburst (cdc_mig_axi.awburst),
-        .m_axi_awlock  (cdc_mig_axi.awlock),
+        .m_axi_awlock (cdc_mig_axi.awlock),
         .m_axi_awcache (cdc_mig_axi.awcache),
-        .m_axi_awprot  (cdc_mig_axi.awprot),
-        .m_axi_awqos   (cdc_mig_axi.awqos),
+        .m_axi_awprot (cdc_mig_axi.awprot),
+        .m_axi_awqos (cdc_mig_axi.awqos),
         .m_axi_awregion(cdc_mig_axi.awregion),
         .m_axi_awvalid (cdc_mig_axi.awvalid),
         .m_axi_awready (cdc_mig_axi.awready),
-        .m_axi_wdata   (cdc_mig_axi.wdata),
-        .m_axi_wstrb   (cdc_mig_axi.wstrb),
-        .m_axi_wlast   (cdc_mig_axi.wlast),
-        .m_axi_wvalid  (cdc_mig_axi.wvalid),
-        .m_axi_wready  (cdc_mig_axi.wready),
-        .m_axi_bid     (cdc_mig_axi.bid),
-        .m_axi_bresp   (cdc_mig_axi.bresp),
-        .m_axi_bvalid  (cdc_mig_axi.bvalid),
-        .m_axi_bready  (cdc_mig_axi.bready),
-        .m_axi_arid    (cdc_mig_axi.arid),
-        .m_axi_araddr  (cdc_mig_axi.araddr),
-        .m_axi_arlen   (cdc_mig_axi.arlen),
-        .m_axi_arsize  (cdc_mig_axi.arsize),
+        .m_axi_wdata (cdc_mig_axi.wdata),
+        .m_axi_wstrb (cdc_mig_axi.wstrb),
+        .m_axi_wlast (cdc_mig_axi.wlast),
+        .m_axi_wvalid (cdc_mig_axi.wvalid),
+        .m_axi_wready (cdc_mig_axi.wready),
+        .m_axi_bid (cdc_mig_axi.bid),
+        .m_axi_bresp (cdc_mig_axi.bresp),
+        .m_axi_bvalid (cdc_mig_axi.bvalid),
+        .m_axi_bready (cdc_mig_axi.bready),
+        .m_axi_arid (cdc_mig_axi.arid),
+        .m_axi_araddr (cdc_mig_axi.araddr),
+        .m_axi_arlen (cdc_mig_axi.arlen),
+        .m_axi_arsize (cdc_mig_axi.arsize),
         .m_axi_arburst (cdc_mig_axi.arburst),
-        .m_axi_arlock  (cdc_mig_axi.arlock),
+        .m_axi_arlock (cdc_mig_axi.arlock),
         .m_axi_arcache (cdc_mig_axi.arcache),
-        .m_axi_arprot  (cdc_mig_axi.arprot),
-        .m_axi_arqos   (cdc_mig_axi.arqos),
+        .m_axi_arprot (cdc_mig_axi.arprot),
+        .m_axi_arqos (cdc_mig_axi.arqos),
         .m_axi_arregion(cdc_mig_axi.arregion),
         .m_axi_arvalid (cdc_mig_axi.arvalid),
         .m_axi_arready (cdc_mig_axi.arready),
-        .m_axi_rid     (cdc_mig_axi.rid),
-        .m_axi_rdata   (cdc_mig_axi.rdata),
-        .m_axi_rresp   (cdc_mig_axi.rresp),
-        .m_axi_rlast   (cdc_mig_axi.rlast),
-        .m_axi_rvalid  (cdc_mig_axi.rvalid),
-        .m_axi_rready  (cdc_mig_axi.rready)
+        .m_axi_rid (cdc_mig_axi.rid),
+        .m_axi_rdata (cdc_mig_axi.rdata),
+        .m_axi_rresp (cdc_mig_axi.rresp),
+        .m_axi_rlast (cdc_mig_axi.rlast),
+        .m_axi_rvalid (cdc_mig_axi.rvalid),
+        .m_axi_rready (cdc_mig_axi.rready)
     );
 
-    // -------------------------------------------------------------------------
     // 6. 1GB DDR3 VRAM Memory Interface Generator Instance (mig_7series_0)
-    // -------------------------------------------------------------------------
     // Buffer the 200MHz differential clock manually so it can be shared
     wire sys_clk_200m_raw;
     wire clk_ref_200m_bufg;
     
     IBUFGDS u_ibufgds_ddr3 (
-        .I  (sys_clk_p),
+        .I (sys_clk_p),
         .IB (sys_clk_n),
-        .O  (sys_clk_200m_raw)
+        .O (sys_clk_200m_raw)
     );
 
     // IDELAYCTRL requires its reference clock to be routed on the global clock network
     BUFG u_bufg_clk_ref (
-        .I  (sys_clk_200m_raw),
-        .O  (clk_ref_200m_bufg)
+        .I (sys_clk_200m_raw),
+        .O (clk_ref_200m_bufg)
     );
 
     mig_7series_0 u_mig_ddr3 (
         // Memory physical pins
-        .ddr3_dq        (ddr3_dq),
-        .ddr3_dqs_n     (ddr3_dqs_n),
-        .ddr3_dqs_p     (ddr3_dqs_p),
-        .ddr3_addr      (ddr3_addr),
-        .ddr3_ba        (ddr3_ba),
-        .ddr3_ras_n     (ddr3_ras_n),
-        .ddr3_cas_n     (ddr3_cas_n),
-        .ddr3_we_n      (ddr3_we_n),
-        .ddr3_reset_n   (ddr3_reset_n),
-        .ddr3_ck_p      (ddr3_ck_p),
-        .ddr3_ck_n      (ddr3_ck_n),
-        .ddr3_cke       (ddr3_cke),
-        .ddr3_dm        (ddr3_dm),
-        .ddr3_odt       (ddr3_odt),
+        .ddr3_dq (ddr3_dq),
+        .ddr3_dqs_n (ddr3_dqs_n),
+        .ddr3_dqs_p (ddr3_dqs_p),
+        .ddr3_addr (ddr3_addr),
+        .ddr3_ba (ddr3_ba),
+        .ddr3_ras_n (ddr3_ras_n),
+        .ddr3_cas_n (ddr3_cas_n),
+        .ddr3_we_n (ddr3_we_n),
+        .ddr3_reset_n (ddr3_reset_n),
+        .ddr3_ck_p (ddr3_ck_p),
+        .ddr3_ck_n (ddr3_ck_n),
+        .ddr3_cke (ddr3_cke),
+        .ddr3_dm (ddr3_dm),
+        .ddr3_odt (ddr3_odt),
 
         // System clocks & calibration
-        .sys_clk_i      (sys_clk_200m_raw),  // To MMCM/PLL (dedicated routing)
-        .clk_ref_i      (clk_ref_200m_bufg), // To IDELAYCTRL (global clock tree)
-        .sys_rst        (sys_rst_n),
-        .ui_clk         (ui_clk),
+        .sys_clk_i (sys_clk_200m_raw), // To MMCM/PLL (dedicated routing)
+        .clk_ref_i (clk_ref_200m_bufg), // To IDELAYCTRL (global clock tree)
+        .sys_rst (sys_rst_n),
+        .ui_clk (ui_clk),
         .ui_clk_sync_rst(ui_clk_sync_rst),
-        .aresetn        (ui_clk_aresetn),
+        .aresetn (ui_clk_aresetn),
         .init_calib_complete(),
 
         // Tie off unused Memory Controller App signals
-        .app_sr_req     (1'b0),
-        .app_ref_req    (1'b0),
-        .app_zq_req     (1'b0),
+        .app_sr_req (1'b0),
+        .app_ref_req (1'b0),
+        .app_zq_req (1'b0),
 
         // 256-bit AXI4 Slave Interface from Clock Converter
-        .s_axi_awid     (cdc_mig_axi.awid),
-        .s_axi_awaddr   (cdc_mig_axi.awaddr),
-        .s_axi_awlen    (cdc_mig_axi.awlen),
-        .s_axi_awsize   (cdc_mig_axi.awsize),
-        .s_axi_awburst  (cdc_mig_axi.awburst),
-        .s_axi_awlock   (cdc_mig_axi.awlock),
-        .s_axi_awcache  (cdc_mig_axi.awcache),
-        .s_axi_awprot   (cdc_mig_axi.awprot),
-        .s_axi_awqos    (cdc_mig_axi.awqos),
-        .s_axi_awvalid  (cdc_mig_axi.awvalid),
-        .s_axi_awready  (cdc_mig_axi.awready),
-        .s_axi_wdata    (cdc_mig_axi.wdata),
-        .s_axi_wstrb    (cdc_mig_axi.wstrb),
-        .s_axi_wlast    (cdc_mig_axi.wlast),
-        .s_axi_wvalid   (cdc_mig_axi.wvalid),
-        .s_axi_wready   (cdc_mig_axi.wready),
-        .s_axi_bready   (cdc_mig_axi.bready),
-        .s_axi_bvalid   (cdc_mig_axi.bvalid),
-        .s_axi_bid      (cdc_mig_axi.bid),
-        .s_axi_bresp    (cdc_mig_axi.bresp),
-        .s_axi_arid     (cdc_mig_axi.arid),
-        .s_axi_araddr   (cdc_mig_axi.araddr),
-        .s_axi_arlen    (cdc_mig_axi.arlen),
-        .s_axi_arsize   (cdc_mig_axi.arsize),
-        .s_axi_arburst  (cdc_mig_axi.arburst),
-        .s_axi_arlock   (cdc_mig_axi.arlock),
-        .s_axi_arcache  (cdc_mig_axi.arcache),
-        .s_axi_arprot   (cdc_mig_axi.arprot),
-        .s_axi_arqos    (cdc_mig_axi.arqos),
-        .s_axi_arvalid  (cdc_mig_axi.arvalid),
-        .s_axi_arready  (cdc_mig_axi.arready),
-        .s_axi_rready   (cdc_mig_axi.rready),
-        .s_axi_rdata    (cdc_mig_axi.rdata),
-        .s_axi_rvalid   (cdc_mig_axi.rvalid),
-        .s_axi_rid      (cdc_mig_axi.rid),
-        .s_axi_rresp    (cdc_mig_axi.rresp),
-        .s_axi_rlast    (cdc_mig_axi.rlast)
+        .s_axi_awid (cdc_mig_axi.awid),
+        .s_axi_awaddr (cdc_mig_axi.awaddr),
+        .s_axi_awlen (cdc_mig_axi.awlen),
+        .s_axi_awsize (cdc_mig_axi.awsize),
+        .s_axi_awburst (cdc_mig_axi.awburst),
+        .s_axi_awlock (cdc_mig_axi.awlock),
+        .s_axi_awcache (cdc_mig_axi.awcache),
+        .s_axi_awprot (cdc_mig_axi.awprot),
+        .s_axi_awqos (cdc_mig_axi.awqos),
+        .s_axi_awvalid (cdc_mig_axi.awvalid),
+        .s_axi_awready (cdc_mig_axi.awready),
+        .s_axi_wdata (cdc_mig_axi.wdata),
+        .s_axi_wstrb (cdc_mig_axi.wstrb),
+        .s_axi_wlast (cdc_mig_axi.wlast),
+        .s_axi_wvalid (cdc_mig_axi.wvalid),
+        .s_axi_wready (cdc_mig_axi.wready),
+        .s_axi_bready (cdc_mig_axi.bready),
+        .s_axi_bvalid (cdc_mig_axi.bvalid),
+        .s_axi_bid (cdc_mig_axi.bid),
+        .s_axi_bresp (cdc_mig_axi.bresp),
+        .s_axi_arid (cdc_mig_axi.arid),
+        .s_axi_araddr (cdc_mig_axi.araddr),
+        .s_axi_arlen (cdc_mig_axi.arlen),
+        .s_axi_arsize (cdc_mig_axi.arsize),
+        .s_axi_arburst (cdc_mig_axi.arburst),
+        .s_axi_arlock (cdc_mig_axi.arlock),
+        .s_axi_arcache (cdc_mig_axi.arcache),
+        .s_axi_arprot (cdc_mig_axi.arprot),
+        .s_axi_arqos (cdc_mig_axi.arqos),
+        .s_axi_arvalid (cdc_mig_axi.arvalid),
+        .s_axi_arready (cdc_mig_axi.arready),
+        .s_axi_rready (cdc_mig_axi.rready),
+        .s_axi_rdata (cdc_mig_axi.rdata),
+        .s_axi_rvalid (cdc_mig_axi.rvalid),
+        .s_axi_rid (cdc_mig_axi.rid),
+        .s_axi_rresp (cdc_mig_axi.rresp),
+        .s_axi_rlast (cdc_mig_axi.rlast)
     );
 
-    // -------------------------------------------------------------------------
     // 7. GPU Top Module (RISC-V CP + GPC + SMs)
-    // -------------------------------------------------------------------------
-    gpu_top u_gpu_top (
-        .clk                    (axi_aclk),
-        .rst_n                  (axi_aresetn),
-        .s_axi_lite             (xdma_rv_axil),
-        .m_axi_gmem             (gpu_xbar_axi),
-        .fb_we                  (fb_we),
-        .fb_addr                (fb_addr),
-        .fb_rgb                 (fb_rgb),
-        .usr_irq_req            (usr_irq_req),
-        .usr_irq_ack            (usr_irq_ack)
-    );
-
-    // -------------------------------------------------------------------------
-    // 8. Framebuffer & HDMI Display Pipeline Instances
-    // -------------------------------------------------------------------------
-    wire        fb_we;
+    wire fb_we;
     wire [18:0] fb_addr;
     wire [23:0] fb_rgb;
+
+    gpu_top u_gpu_top (
+        .clk (axi_aclk),
+        .rst_n (axi_aresetn),
+        .s_axi_lite (xdma_rv_axil),
+        .m_axi_gmem (gpu_xbar_axi),
+        .fb_we (fb_we),
+        .fb_addr (fb_addr),
+        .fb_rgb (fb_rgb),
+        .usr_irq_req (usr_irq_req),
+        .usr_irq_ack (usr_irq_ack)
+    );
+
+    // 8. Framebuffer & HDMI Display Pipeline Instances
 
     framebuffer_ram #(
         .H_RES(640),
         .V_RES(480),
         .DATA_WIDTH(24)
     ) u_framebuffer (
-        .clk_gpu                (axi_aclk),
-        .we_gpu                 (fb_we),
-        .addr_gpu               (fb_addr),
-        .din_gpu                (fb_rgb),
-        .clk_pix                (hdmi_clk),
-        .addr_pix               (fb_addr),
-        .dout_pix               ()
+        .clk_gpu (axi_aclk),
+        .we_gpu (fb_we),
+        .addr_gpu (fb_addr),
+        .din_gpu (fb_rgb),
+        .clk_pix (hdmi_clk),
+        .addr_pix (fb_addr),
+        .dout_pix ()
     );
 
     hdmi_top u_hdmi (
-        .sys_clk_125m          (axi_aclk),
-        .rst_n                 (axi_aresetn),
-        .hdmi_nreset           (hdmi_nreset),
-        .hdmi_clk              (hdmi_clk),
-        .hdmi_hs               (hdmi_hs),
-        .hdmi_vs               (hdmi_vs),
-        .hdmi_de               (hdmi_de),
-        .hdmi_d                (hdmi_d),
-        .hdmi_scl              (hdmi_scl),
-        .hdmi_sda              (hdmi_sda),
-        .hdmi_init_done        (hdmi_init_done)
+        .sys_clk_125m (axi_aclk),
+        .rst_n (axi_aresetn),
+        .hdmi_nreset (hdmi_nreset),
+        .hdmi_clk (hdmi_clk),
+        .hdmi_hs (hdmi_hs),
+        .hdmi_vs (hdmi_vs),
+        .hdmi_de (hdmi_de),
+        .hdmi_d (hdmi_d),
+        .hdmi_scl (hdmi_scl),
+        .hdmi_sda (hdmi_sda),
+        .hdmi_init_done (hdmi_init_done)
     );
 
 endmodule

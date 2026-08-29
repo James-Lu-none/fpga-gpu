@@ -1,19 +1,17 @@
-// =========================================================================
 // HDMI Colorbar Generator (8-Bar Standard Color Patterns for Testing)
-// =========================================================================
 
 `timescale 1ns / 1ps
 
-module hdmi_colorbar_gen #(
+module colorbar_gen #(
     parameter H_ACTIVE = 12'd1920
 )(
-    input  wire        clk_pix,
-    input  wire        rst_n,
-    input  wire        video_de,
-    input  wire [11:0] pixel_x,
-    input  wire [11:0] pixel_y,
+    input wire clk_pix,
+    input wire rst_n,
+    input wire video_de,
+    input wire [11:0] pixel_x,
+    input wire [11:0] pixel_y,
 
-    output reg  [23:0] rgb_data    // 24-bit RGB (R[23:16], G[15:8], B[7:0])
+    output reg [23:0] rgb_data // 24-bit RGB (R[23:16], G[15:8], B[7:0])
 );
 
     // Calculate bar width (1920 / 8 = 240 pixels per bar)

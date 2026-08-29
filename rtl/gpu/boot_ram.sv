@@ -1,29 +1,27 @@
-// =========================================================================
 // RISC-V Block RAM Instruction & Data Memory (16KB Dual-Port RAM)
 // Loads Firmware Image (firmware.hex) via $readmemh
-// =========================================================================
 
 `timescale 1ns / 1ps
 
-module riscv_bram #(
-    parameter MEM_SIZE_BYTES = 16384          // 16KB Instruction + Data BRAM
+module boot_ram #(
+    parameter MEM_SIZE_BYTES = 16384 // 16KB Instruction + Data BRAM
 )(
-    input  wire        clk,
-    input  wire        rst_n,
+    input wire clk,
+    input wire rst_n,
 
     // Port A (RISC-V Memory Interface)
-    input  wire        en_a,
-    input  wire [3:0]  we_a,
-    input  wire [13:0] addr_a, // 16KB = 4096 x 32-bit words (addr[13:2])
-    input  wire [31:0] din_a,
-    output reg  [31:0] dout_a,
+    input wire en_a,
+    input wire [3:0] we_a,
+    input wire [13:0] addr_a, // 16KB = 4096 x 32-bit words (addr[13:2])
+    input wire [31:0] din_a,
+    output reg [31:0] dout_a,
 
     // Port B (Host PCIe XDMA Direct BRAM & Mailbox Interface)
-    input  wire        en_b,
-    input  wire [3:0]  we_b,
-    input  wire [13:0] addr_b,
-    input  wire [31:0] din_b,
-    output reg  [31:0] dout_b
+    input wire en_b,
+    input wire [3:0] we_b,
+    input wire [13:0] addr_b,
+    input wire [31:0] din_b,
+    output reg [31:0] dout_b
 );
 
     // 4096 x 32-bit RAM Array (16KB)
