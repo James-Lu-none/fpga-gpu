@@ -19,6 +19,9 @@ module warp_context #(
     output reg [4:0] available_warp_slots, // Number of free slots
     input wire alloc_valid, // Allocate a new warp
     input wire [15:0] alloc_block_id, // Which block this warp belongs to
+    input wire [15:0] alloc_block_idx_x,
+    input wire [15:0] alloc_block_idx_y,
+    input wire [15:0] alloc_thread_id_start,
     input wire [31:0] alloc_active_mask, // Initial active threads
 
     // Issue Interface (To Fetch/Decode Stage)
@@ -26,6 +29,9 @@ module warp_context #(
     output reg [3:0] issue_warp_id,
     output reg [11:0] issue_pc, // Program Counter
     output reg [31:0] issue_active_mask,
+    output reg [15:0] issue_block_idx_x,
+    output reg [15:0] issue_block_idx_y,
+    output reg [15:0] issue_thread_id_start,
     
     // Feedback Interface (From Execution Pipeline)
     input wire wb_valid, // Write-back valid from pipeline
@@ -49,6 +55,9 @@ module warp_context #(
     reg [11:0] warp_pc [0:MAX_WARPS-1];
     reg [31:0] warp_mask [0:MAX_WARPS-1];
     reg [15:0] warp_block_id [0:MAX_WARPS-1];
+    reg [15:0] warp_block_idx_x [0:MAX_WARPS-1];
+    reg [15:0] warp_block_idx_y [0:MAX_WARPS-1];
+    reg [15:0] warp_thread_id_start [0:MAX_WARPS-1];
 
     // SIMT Stack (Active Mask Stack)
     // Depth = 4. Stores {12-bit PC, 32-bit Mask}
@@ -86,6 +95,9 @@ module warp_context #(
             issue_warp_id <= 4'd0;
             issue_pc <= 12'd0;
             issue_active_mask <= 32'd0;
+            issue_block_idx_x <= 16'd0;
+            issue_block_idx_y <= 16'd0;
+            issue_thread_id_start <= 16'd0;
             
             for (integer j = 0; j < MAX_WARPS; j = j + 1) begin
                 warp_state[j] <= STATE_FREE;
@@ -98,6 +110,9 @@ module warp_context #(
                 warp_pc[free_warp_idx] <= 12'd0; // Reset PC to 0
                 warp_mask[free_warp_idx] <= alloc_active_mask;
                 warp_block_id[free_warp_idx] <= alloc_block_id;
+                warp_block_idx_x[free_warp_idx] <= alloc_block_idx_x;
+                warp_block_idx_y[free_warp_idx] <= alloc_block_idx_y;
+                warp_thread_id_start[free_warp_idx] <= alloc_thread_id_start;
             end
 
             // 2. Handle Feedback (Instruction Complete / Exit)
@@ -159,6 +174,9 @@ module warp_context #(
                     issue_warp_id <= next_idx;
                     issue_pc <= warp_pc[next_idx];
                     issue_active_mask <= warp_mask[next_idx];
+                    issue_block_idx_x <= warp_block_idx_x[next_idx];
+                    issue_block_idx_y <= warp_block_idx_y[next_idx];
+                    issue_thread_id_start <= warp_thread_id_start[next_idx];
                     
                     // Set state to STALL so we don't issue it again until it writes back
                     warp_state[next_idx] <= STATE_STALL;

@@ -43,6 +43,8 @@ module streaming_multiprocessor (
     wire warp_ready;
     wire [15:0] current_warp_id;
     wire [15:0] current_block_id;
+    wire [15:0] alloc_block_idx_x;
+    wire [15:0] alloc_block_idx_y;
     wire [31:0] active_mask;
     wire [15:0] thread_id_start;
 
@@ -59,6 +61,8 @@ module streaming_multiprocessor (
         .warp_ready (warp_ready),
         .current_warp_id (current_warp_id),
         .current_block_id (current_block_id),
+        .alloc_block_idx_x (alloc_block_idx_x),
+        .alloc_block_idx_y (alloc_block_idx_y),
         .active_mask (active_mask),
         .thread_id_start (thread_id_start)
     );
@@ -84,6 +88,9 @@ module streaming_multiprocessor (
         .alloc_ready (warp_ready),
         .available_warp_slots (available_warp_slots), // NEW
         .alloc_block_id (current_block_id),
+        .alloc_block_idx_x (alloc_block_idx_x),
+        .alloc_block_idx_y (alloc_block_idx_y),
+        .alloc_thread_id_start (thread_id_start),
         .alloc_active_mask (active_mask),
         
         .l1_req_valid (l1_req_valid),

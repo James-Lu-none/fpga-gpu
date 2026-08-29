@@ -40,10 +40,18 @@ module vector_regfile #(
     input wire [3:0] decode_warp_id,
     input wire [11:0] decode_pc,
     input wire [31:0] decode_active_mask,
+    input wire [15:0] decode_block_idx_x,
+    input wire [15:0] decode_block_idx_y,
+    input wire [15:0] decode_thread_id_start,
     input wire [7:0] decode_opcode,
+
+    // address space is 2^5 = 32 registers (R0~R31)
+    // so in assembly, we only need 5 bits to address the registers
+    // and only can use R0~R31
     input wire [4:0] decode_rd,
     input wire [4:0] decode_rs1,
     input wire [4:0] decode_rs2,
+
     input wire [31:0] decode_imm,
     input wire decode_is_imm,
 
@@ -52,6 +60,9 @@ module vector_regfile #(
     output reg [3:0] op_warp_id,
     output reg [11:0] op_pc,
     output reg [31:0] op_active_mask,
+    output reg [15:0] op_block_idx_x,
+    output reg [15:0] op_block_idx_y,
+    output reg [15:0] op_thread_id_start,
     output reg [7:0] op_opcode,
     output reg [4:0] op_rd,
     output reg [31:0] op_imm,
@@ -93,6 +104,9 @@ module vector_regfile #(
     reg [4:0] decode_rd_q;
     reg [31:0] decode_imm_q;
     reg decode_is_imm_q;
+    reg [15:0] decode_block_idx_x_q;
+    reg [15:0] decode_block_idx_y_q;
+    reg [15:0] decode_thread_id_start_q;
 
     // Synchronous Read and Write
     always @(posedge clk) begin
@@ -128,6 +142,9 @@ module vector_regfile #(
             decode_rd_q <= 5'd0;
             decode_imm_q <= 32'd0;
             decode_is_imm_q <= 1'b0;
+            decode_block_idx_x_q <= 16'd0;
+            decode_block_idx_y_q <= 16'd0;
+            decode_thread_id_start_q <= 16'd0;
         end else begin
             decode_valid_q <= decode_valid;
             decode_warp_id_q <= decode_warp_id;
@@ -137,6 +154,9 @@ module vector_regfile #(
             decode_rd_q <= decode_rd;
             decode_imm_q <= decode_imm;
             decode_is_imm_q <= decode_is_imm;
+            decode_block_idx_x_q <= decode_block_idx_x;
+            decode_block_idx_y_q <= decode_block_idx_y;
+            decode_thread_id_start_q <= decode_thread_id_start;
         end
     end
 
@@ -147,6 +167,9 @@ module vector_regfile #(
             op_warp_id <= 4'd0;
             op_pc <= 12'd0;
             op_active_mask <= 32'd0;
+            op_block_idx_x <= 16'd0;
+            op_block_idx_y <= 16'd0;
+            op_thread_id_start <= 16'd0;
             op_opcode <= 8'd0;
             op_rd <= 5'd0;
             op_imm <= 32'd0;
@@ -160,13 +183,16 @@ module vector_regfile #(
                 op_warp_id <= decode_warp_id_q;
                 op_pc <= decode_pc_q;
                 op_active_mask <= decode_active_mask_q;
+                op_block_idx_x <= decode_block_idx_x_q;
+                op_block_idx_y <= decode_block_idx_y_q;
+                op_thread_id_start <= decode_thread_id_start_q;
                 op_opcode <= decode_opcode_q;
                 op_rd <= decode_rd_q;
                 op_imm <= decode_imm_q;
                 op_is_imm <= decode_is_imm_q;
                 
                 op_rs1_data <= rs1_data_read;
-                op_rs2_data <= rs2_data_read; // Keep rs2 vector clean; ALU multiplexes imm
+                op_rs2_data <= rs2_data_read;
             end
         end
     end

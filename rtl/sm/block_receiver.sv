@@ -22,7 +22,9 @@ module block_receiver #(
     output reg warp_valid,
     input wire warp_ready, // Has at least 1 free slot
     output reg [15:0] current_warp_id,
-    output reg [15:0] current_block_id, // Linearized Block ID (simplified)
+    output reg [15:0] current_block_id, // Linearized Block ID
+    output reg [15:0] alloc_block_idx_x,
+    output reg [15:0] alloc_block_idx_y,
     output reg [31:0] active_mask, 
     output reg [15:0] thread_id_start 
 );
@@ -45,6 +47,8 @@ module block_receiver #(
             block_accepted <= 1'b0;
             current_warp_id <= 16'd0;
             current_block_id <= 16'd0;
+            alloc_block_idx_x <= 16'd0;
+            alloc_block_idx_y <= 16'd0;
             active_mask <= 32'hFFFFFFFF;
             thread_id_start <= 16'd0;
             warp_cnt <= 10'd0;
@@ -64,6 +68,8 @@ module block_receiver #(
                     block_accepted <= 1'b0; // Deassert ack
                     warp_valid <= 1'b1;
                     current_block_id <= linear_block_id;
+                    alloc_block_idx_x <= block_idx_x;
+                    alloc_block_idx_y <= block_idx_y;
                     current_warp_id <= warp_cnt;
                     thread_id_start <= warp_cnt * WARP_SIZE; // Thread offset within the block
 

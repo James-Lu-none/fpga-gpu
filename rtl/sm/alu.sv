@@ -16,6 +16,9 @@ module alu #(
     // Operand Interface
     input wire op_valid,
     input wire [3:0] op_warp_id,
+    input wire [15:0] op_block_idx_x,
+    input wire [15:0] op_block_idx_y,
+    input wire [15:0] op_thread_id_start,
     input wire [7:0] op_opcode,
     input wire [4:0] op_rd,
     input wire [31:0] op_imm,
@@ -44,6 +47,7 @@ module alu #(
     localparam OP_MUL = 8'h03;
     localparam OP_CMP = 8'h04;
     localparam OP_ADDI = 8'h81;
+    localparam OP_S2R = 8'hB0;
     localparam OP_BR = 8'hC0;
     localparam OP_SYNC = 8'hE0;
     localparam OP_EXIT = 8'hFF;
@@ -90,6 +94,32 @@ module alu #(
                 alu1_out = lane1_rs1 * lane1_rs2;
                 alu_writes_reg = 1'b1;
                 _alu_updates_nzp = 1'b1;
+            end
+            OP_S2R: begin
+                alu_writes_reg = 1'b1;
+                // Imm specifies which system register to read
+                case (op_imm)
+                    32'd0: begin // SR_TID.X
+                        alu0_out = op_thread_id_start;
+                        alu1_out = op_thread_id_start + 32'd1;
+                    end
+                    32'd1: begin // SR_TID.Y (Assume 1D for now, output 0)
+                        alu0_out = 32'd0;
+                        alu1_out = 32'd0;
+                    end
+                    32'd2: begin // SR_BID.X
+                        alu0_out = op_block_idx_x;
+                        alu1_out = op_block_idx_x;
+                    end
+                    32'd3: begin // SR_BID.Y
+                        alu0_out = op_block_idx_y;
+                        alu1_out = op_block_idx_y;
+                    end
+                    default: begin
+                        alu0_out = 32'd0;
+                        alu1_out = 32'd0;
+                    end
+                endcase
             end
             OP_BR: begin
                 _is_branch = 1'b1;

@@ -18,12 +18,18 @@ module fetch_decode #(
     input wire [3:0] issue_warp_id,
     input wire [11:0] issue_pc,
     input wire [31:0] issue_active_mask,
+    input wire [15:0] issue_block_idx_x,
+    input wire [15:0] issue_block_idx_y,
+    input wire [15:0] issue_thread_id_start,
 
     // Decode Output Interface (To Execution Pipeline)
     output reg decode_valid,
     output reg [3:0] decode_warp_id,
     output reg [11:0] decode_pc,
     output reg [31:0] decode_active_mask,
+    output reg [15:0] decode_block_idx_x,
+    output reg [15:0] decode_block_idx_y,
+    output reg [15:0] decode_thread_id_start,
     output reg [7:0] decode_opcode,
     output reg [4:0] decode_rd, // Also used as COND for Branches
     output reg [4:0] decode_rs1,
@@ -44,11 +50,13 @@ module fetch_decode #(
         fetched_instr <= iram[issue_pc];
     end
 
-    // 2. Fetch Pipeline Register
     reg issue_valid_q;
     reg [3:0] issue_warp_id_q;
     reg [11:0] issue_pc_q;
     reg [31:0] issue_active_mask_q;
+    reg [15:0] issue_block_idx_x_q;
+    reg [15:0] issue_block_idx_y_q;
+    reg [15:0] issue_thread_id_start_q;
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -56,11 +64,17 @@ module fetch_decode #(
             issue_warp_id_q <= 4'd0;
             issue_pc_q <= 12'd0;
             issue_active_mask_q <= 32'd0;
+            issue_block_idx_x_q <= 16'd0;
+            issue_block_idx_y_q <= 16'd0;
+            issue_thread_id_start_q <= 16'd0;
         end else begin
             issue_valid_q <= issue_valid;
             issue_warp_id_q <= issue_warp_id;
             issue_pc_q <= issue_pc;
             issue_active_mask_q <= issue_active_mask;
+            issue_block_idx_x_q <= issue_block_idx_x;
+            issue_block_idx_y_q <= issue_block_idx_y;
+            issue_thread_id_start_q <= issue_thread_id_start;
         end
     end
 
@@ -86,6 +100,9 @@ module fetch_decode #(
             decode_warp_id <= 4'd0;
             decode_pc <= 12'd0;
             decode_active_mask <= 32'd0;
+            decode_block_idx_x <= 16'd0;
+            decode_block_idx_y <= 16'd0;
+            decode_thread_id_start <= 16'd0;
             decode_opcode <= 8'd0;
             decode_rd <= 5'd0;
             decode_rs1 <= 5'd0;
@@ -95,11 +112,14 @@ module fetch_decode #(
         end else begin
             decode_valid <= issue_valid_q;
             
+            decode_warp_id <= issue_warp_id_q;
+            decode_pc <= issue_pc_q;
+            decode_active_mask <= issue_active_mask_q;
+            decode_block_idx_x <= issue_block_idx_x_q;
+            decode_block_idx_y <= issue_block_idx_y_q;
+            decode_thread_id_start <= issue_thread_id_start_q;
+            
             if (issue_valid_q) begin
-                decode_warp_id <= issue_warp_id_q;
-                decode_pc <= issue_pc_q;
-                decode_active_mask <= issue_active_mask_q;
-                
                 decode_opcode <= op;
                 decode_rd <= rd;
                 decode_rs1 <= rs1;

@@ -10,9 +10,18 @@ OPCODES = {
     "ADDI": 0x81,
     "LDR":  0xA0,
     "STR":  0xA1,
+    "S2R":  0xB0,
     "BR":   0xC0,
     "SYNC": 0xE0,
     "EXIT": 0xFF
+}
+
+# System Registers for S2R
+SYS_REGS = {
+    "SR_TID.X": 0,
+    "SR_TID.Y": 1,
+    "SR_BID.X": 2,
+    "SR_BID.Y": 3
 }
 
 def reg_to_int(reg_str):
@@ -80,6 +89,14 @@ def parse_line(line):
         if 'P' in nzp_str: cond |= 0x1
         imm = int(parts[2], 0) & 0x7FFFF # 19-bit offset
         return (opcode << 24) | (cond << 19) | imm
+        
+    elif mnemonic == "S2R":
+        rd = reg_to_int(parts[1])
+        sr_name = parts[2].upper()
+        if sr_name not in SYS_REGS:
+            raise ValueError(f"Unknown system register: {sr_name}")
+        imm = SYS_REGS[sr_name]
+        return (opcode << 24) | (rd << 19) | imm
         
     elif mnemonic in ["EXIT", "SYNC"]:
         return opcode << 24

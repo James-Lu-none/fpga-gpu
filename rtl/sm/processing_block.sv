@@ -15,6 +15,9 @@ module processing_block (
     // Warp Launch Interface (From Warp Scheduler)
     input wire alloc_valid,
     input wire [15:0] alloc_block_id,
+    input wire [15:0] alloc_block_idx_x,
+    input wire [15:0] alloc_block_idx_y,
+    input wire [15:0] alloc_thread_id_start,
     input wire [31:0] alloc_active_mask,
     output wire alloc_ready,
     output wire [4:0] available_warp_slots,
@@ -56,12 +59,18 @@ module processing_block (
     wire [3:0] issue_warp_id;
     wire [11:0] issue_pc;
     wire [31:0] issue_active_mask;
+    wire [15:0] issue_block_idx_x;
+    wire [15:0] issue_block_idx_y;
+    wire [15:0] issue_thread_id_start;
 
     // Fetch -> VRF
     wire decode_valid;
     wire [3:0] decode_warp_id;
     wire [11:0] decode_pc;
     wire [31:0] decode_active_mask;
+    wire [15:0] decode_block_idx_x;
+    wire [15:0] decode_block_idx_y;
+    wire [15:0] decode_thread_id_start;
     wire [7:0] decode_opcode;
     wire [4:0] decode_rd;
     wire [4:0] decode_rs1;
@@ -74,6 +83,9 @@ module processing_block (
     wire [3:0] op_warp_id;
     wire [11:0] op_pc;
     wire [31:0] op_active_mask;
+    wire [15:0] op_block_idx_x;
+    wire [15:0] op_block_idx_y;
+    wire [15:0] op_thread_id_start;
     wire [7:0] op_opcode;
     wire [4:0] op_rd;
     wire [31:0] op_imm;
@@ -85,7 +97,8 @@ module processing_block (
     wire alu_wb_valid;
     wire [3:0] alu_wb_warp_id;
     wire [4:0] alu_wb_rd;
-    wire [63:0] alu_wb_data;
+    // 2 alus in alu now, so data is concatenated as {alu1_wb_data, alu2_wb_data}
+    wire [63:0] alu_wb_data; 
     
     wire ctx_alu_wb_valid;
     wire [3:0] ctx_alu_wb_warp_id;
@@ -107,6 +120,7 @@ module processing_block (
     wire wb_valid;
     wire [3:0] wb_warp_id;
     wire [4:0] wb_rd;
+    // 2 alus in alu now formated as {alu1_wb_data, alu2_wb_data}
     wire [63:0] wb_data;
     wire ctx_wb_valid;
     wire [3:0] ctx_wb_warp_id;
@@ -142,11 +156,17 @@ module processing_block (
         .available_warp_slots(available_warp_slots),
         .alloc_valid (alloc_valid),
         .alloc_block_id (alloc_block_id),
+        .alloc_block_idx_x (alloc_block_idx_x),
+        .alloc_block_idx_y (alloc_block_idx_y),
+        .alloc_thread_id_start (alloc_thread_id_start),
         .alloc_active_mask (alloc_active_mask),
         .issue_valid (issue_valid),
         .issue_warp_id (issue_warp_id),
         .issue_pc (issue_pc),
         .issue_active_mask (issue_active_mask),
+        .issue_block_idx_x (issue_block_idx_x),
+        .issue_block_idx_y (issue_block_idx_y),
+        .issue_thread_id_start (issue_thread_id_start),
         .wb_valid (ctx_wb_valid),
         .wb_warp_id (ctx_wb_warp_id),
         .wb_next_pc (ctx_wb_next_pc),
@@ -170,10 +190,16 @@ module processing_block (
         .issue_warp_id (issue_warp_id),
         .issue_pc (issue_pc),
         .issue_active_mask (issue_active_mask),
+        .issue_block_idx_x (issue_block_idx_x),
+        .issue_block_idx_y (issue_block_idx_y),
+        .issue_thread_id_start (issue_thread_id_start),
         .decode_valid (decode_valid),
         .decode_warp_id (decode_warp_id),
         .decode_pc (decode_pc),
         .decode_active_mask (decode_active_mask),
+        .decode_block_idx_x (decode_block_idx_x),
+        .decode_block_idx_y (decode_block_idx_y),
+        .decode_thread_id_start (decode_thread_id_start),
         .decode_opcode (decode_opcode),
         .decode_rd (decode_rd),
         .decode_rs1 (decode_rs1),
@@ -194,6 +220,9 @@ module processing_block (
         .decode_warp_id (decode_warp_id),
         .decode_pc (decode_pc),
         .decode_active_mask (decode_active_mask),
+        .decode_block_idx_x (decode_block_idx_x),
+        .decode_block_idx_y (decode_block_idx_y),
+        .decode_thread_id_start (decode_thread_id_start),
         .decode_opcode (decode_opcode),
         .decode_rd (decode_rd),
         .decode_rs1 (decode_rs1),
@@ -204,6 +233,9 @@ module processing_block (
         .op_warp_id (op_warp_id),
         .op_pc (op_pc),
         .op_active_mask (op_active_mask),
+        .op_block_idx_x (op_block_idx_x),
+        .op_block_idx_y (op_block_idx_y),
+        .op_thread_id_start (op_thread_id_start),
         .op_opcode (op_opcode),
         .op_rd (op_rd),
         .op_imm (op_imm),
@@ -231,6 +263,9 @@ module processing_block (
         .rst_n (rst_n),
         .op_valid (op_valid),
         .op_warp_id (op_warp_id),
+        .op_block_idx_x (op_block_idx_x),
+        .op_block_idx_y (op_block_idx_y),
+        .op_thread_id_start (op_thread_id_start),
         .op_opcode (op_opcode),
         .op_rd (op_rd),
         .op_imm (op_imm),
