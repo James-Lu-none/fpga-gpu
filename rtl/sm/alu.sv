@@ -140,10 +140,6 @@ module alu (
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             wb.valid <= 1'b0;
-            wb.warp_id <= 4'd0;
-            wb.rd <= 5'd0;
-            wb.data <= 64'd0;
-            wb.mask <= 32'hFFFFFFFF; // Assuming all lanes active for now, or drive properly if added to operand_if
         end else begin
             wb.valid <= 1'b0;
             if (op.valid) begin

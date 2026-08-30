@@ -99,16 +99,6 @@ module vector_regfile (
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             decode_valid_q <= 1'b0;
-            decode_warp_id_q <= 4'd0;
-            decode_pc_q <= 12'd0;
-            decode_active_mask_q <= 32'd0;
-            decode_opcode_q <= 8'd0;
-            decode_rd_q <= 5'd0;
-            decode_imm_q <= 32'd0;
-            decode_is_imm_q <= 1'b0;
-            decode_block_idx_x_q <= 16'd0;
-            decode_block_idx_y_q <= 16'd0;
-            decode_thread_id_start_q <= 16'd0;
         end else begin
             decode_valid_q <= decode.valid;
             decode_warp_id_q <= decode.warp_id;
@@ -128,18 +118,6 @@ module vector_regfile (
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             op.valid <= 1'b0;
-            op.warp_id <= 4'd0;
-            op.pc <= 12'd0;
-            op.active_mask <= 32'd0;
-            op.block_idx_x <= 16'd0;
-            op.block_idx_y <= 16'd0;
-            op.thread_id_start <= 16'd0;
-            op.opcode <= 8'd0;
-            op.rd <= 5'd0;
-            op.imm <= 32'd0;
-            op.is_imm <= 1'b0;
-            op.rs1_data <= 64'd0;
-            op.rs2_data <= 64'd0;
         end else begin
             op.valid <= decode_valid_q;
             

@@ -51,30 +51,12 @@ module lsu (
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             state <= STATE_IDLE;
-            active_warp_id <= 0;
-            active_pc <= 12'd0;
-            active_rd <= 5'd0;
             is_load <= 1'b0;
-            
             l1_req_valid <= 1'b0;
-            l1_req_addr <= 32'd0;
-            l1_req_wdata <= 64'd0;
             l1_req_we <= 1'b0;
             
             wb.valid <= 1'b0;
-            wb.warp_id <= 4'd0;
-            wb.rd <= 5'd0;
-            wb.data <= 64'd0;
-            wb.mask <= 32'hFFFFFFFF;
-            
             ctx_wb.valid <= 1'b0;
-            ctx_wb.warp_id <= 4'd0;
-            ctx_wb.next_pc <= 12'd0;
-            ctx_wb.is_done <= 1'b0;
-            ctx_wb.is_divergent <= 1'b0;
-            ctx_wb.taken_mask <= 32'hFFFFFFFF;
-            ctx_wb.not_taken_mask <= 32'd0;
-            ctx_wb.is_sync <= 1'b0;
         end else begin
             // Default de-asserts
             wb.valid <= 1'b0;

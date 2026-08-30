@@ -90,11 +90,7 @@ module l1_cache (
             state <= STATE_IDLE;
             req_ready <= 1'b1;
             rsp_valid <= 1'b0;
-            rsp_rdata <= 64'd0;
             l2_req_valid <= 1'b0;
-            l2_req_addr <= 32'd0;
-            l2_req_wdata <= 256'd0;
-            l2_req_wstrb <= 32'd0;
             l2_req_we <= 1'b0;
         end else begin
             // Default de-asserts
@@ -112,58 +108,58 @@ module l1_cache (
                 end
 
                 STATE_COMPARE: begin
-                        // Hit/Miss Check
+                    // Hit/Miss Check
                     if (valid_ram[req_index_q] && (tag_ram_dout == req_tag_q)) begin
-                            // HIT
+                        // HIT
                         if (req_we_q) begin
-                                // Write-Through: Must go to L2
-                                l2_req_valid <= 1'b1;
+                            // Write-Through: Must go to L2
+                            l2_req_valid <= 1'b1;
                             l2_req_addr <= {req_addr_q[31:5], 5'd0};
-                                l2_req_we <= 1'b1;
-                                
-                                // Shift wdata to correct position
-                                // req_offset[4:3] selects which 64-bit chunk (0 to 3)
+                            l2_req_we <= 1'b1;
+                            
+                            // Shift wdata to correct position
+                            // req_offset[4:3] selects which 64-bit chunk (0 to 3)
                             l2_req_wdata <= {192'd0, req_wdata_q} << (req_offset_q[4:3] * 64);
                             l2_req_wstrb <= 32'h00_00_00_FF << req_offset_q;
-                                
-                                // Also update local L1 Cache Data
-                                // In Verilog, we can just do a partial update if we model byte-enables,
-                                // but for simplicity, we'll just invalidate on write or implement a RMW.
-                                // Actually, since we're writing through, let's just invalidate L1 on write 
-                                // to avoid RMW complexity in a simple 1-cycle hit path.
+                            
+                            // Also update local L1 Cache Data
+                            // In Verilog, we can just do a partial update if we model byte-enables,
+                            // but for simplicity, we'll just invalidate on write or implement a RMW.
+                            // Actually, since we're writing through, let's just invalidate L1 on write 
+                            // to avoid RMW complexity in a simple 1-cycle hit path.
                             valid_ram[req_index_q] <= 1'b0; 
-                                
-                                state <= STATE_WR_THRU;
-                            end else begin
-                                // Read Hit
-                                rsp_valid <= 1'b1;
-                                // Extract 64-bit data from 256-bit line
+                            
+                            state <= STATE_WR_THRU;
+                        end else begin
+                            // Read Hit
+                            rsp_valid <= 1'b1;
+                            // Extract 64-bit data from 256-bit line
                             case (req_offset_q[4:3])
                                 2'd0: rsp_rdata <= data_ram_dout[63:0];
                                 2'd1: rsp_rdata <= data_ram_dout[127:64];
                                 2'd2: rsp_rdata <= data_ram_dout[191:128];
                                 2'd3: rsp_rdata <= data_ram_dout[255:192];
-                                endcase
-                                req_ready <= 1'b1; // Ready for next cycle
+                            endcase
+                            req_ready <= 1'b1; // Ready for next cycle
                             state <= STATE_IDLE;
-                            end
-                        end else begin
-                            // MISS
+                        end
+                    end else begin
+                        // MISS
                         if (req_we_q) begin
-                                // Write-Miss: Write-Around (send to L2 only)
-                                l2_req_valid <= 1'b1;
+                            // Write-Miss: Write-Around (send to L2 only)
+                            l2_req_valid <= 1'b1;
                             l2_req_addr <= {req_addr_q[31:5], 5'd0};
-                                l2_req_we <= 1'b1;
+                            l2_req_we <= 1'b1;
                             l2_req_wdata <= {192'd0, req_wdata_q} << (req_offset_q[4:3] * 64);
                             l2_req_wstrb <= 32'h00_00_00_FF << req_offset_q;
-                                state <= STATE_WR_THRU;
-                            end else begin
-                                // Read-Miss: Fetch from L2
-                                l2_req_valid <= 1'b1;
+                            state <= STATE_WR_THRU;
+                        end else begin
+                            // Read-Miss: Fetch from L2
+                            l2_req_valid <= 1'b1;
                             l2_req_addr <= {req_addr_q[31:5], 5'd0};
-                                l2_req_we <= 1'b0;
-                                l2_req_wstrb <= 32'd0;
-                                state <= STATE_MISS;
+                            l2_req_we <= 1'b0;
+                            l2_req_wstrb <= 32'd0;
+                            state <= STATE_MISS;
                         end
                     end
                 end

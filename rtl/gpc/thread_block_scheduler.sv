@@ -87,11 +87,6 @@ module thread_block_scheduler (
             state <= STATE_IDLE;
             grid_done <= 1'b0;
             sm_block_issue_valid <= {NUM_SMS{1'b0}};
-            sm_block_idx_x <= 0;
-            sm_block_idx_y <= 0;
-            sm_warps_per_block <= 0;
-            current_block_x <= 0;
-            current_block_y <= 0;
             chosen_sm_idx <= 0;
         end else begin
             case (state)

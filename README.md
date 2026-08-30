@@ -76,3 +76,15 @@ The register space is built using Vivado IP Wizard generated AXI4-Lite Slave per
 - **Dual-Port Framebuffer VRAM ([`rtl/framebuffer_ram.v`](file:///c:/Users/user/workspace/fpga-gpu/rtl/framebuffer_ram.v))**:
   - Bridges GPU SIMD Compute Core parallel rendering output (`gpu_compute_core.v` Opcode 3) to SiI9134 HDMI Transmitter display pipeline.
   - Allows Host CUDA Kernels to submit parallel render jobs, compute 24-bit RGB pixel data on FPGA SIMD cores, write directly to Framebuffer VRAM, and output real-time 1080P/720P video over HDMI!
+
+### issues during implementation
+
+The entire system uses XDMA's generated clock (axi_aclk: 125MHz) and asynchronous reset (axi_aresetn)
+
+1. Reset across clock domains: reset from XDMA to HDMI IP
+  In HDMI top module, a MMCME2_BASE ip is used to generate pixel clock (clk_pix), which is desynchronized with XDMA's clock domain. So when we try to reset HDMI module with axi_aresetn, it will not be reset properly. To fix this issue, we use a two-flop synchronizer to convert the asynchronous reset to a synchronous reset for the HDMI IP. (see rtl/hdmi/hdmi_top.sv:66 in detail)
+
+2. Setup/Hold time violations from XDMA to GPU submodules
+  Since in GPU modules, there are thousands of registers connected to the global reset signal (`axi_aresetn`), the massive fanout and long routing distances across the FPGA fabric cause severe recovery/removal time violations. Thus, a Reset Tree (Reset Pipeline) is implemented, so that each reset net is locally bounded, ensuring perfect timing closure regardless of chip size. In this project, the reset signal from XDMA is only distributed to the top-level GPU module. Then, the reset signal is registered at each hierarchical boundary (e.g., Top -> GPC -> SM -> Submodules).
+3. reduce fanout for reset signal
+  By removing reset logic from all "Datapath" registers (e.g., 256-bit buses, operands) and only resetting "Control" registers (e.g., FSM states, valid signals).

@@ -119,8 +119,6 @@ module l2_cache (
             req_ready_internal <= 1'b1;
             sm0_rsp_valid <= 1'b0;
             sm1_rsp_valid <= 1'b0;
-            sm0_rsp_rdata <= 256'd0;
-            sm1_rsp_rdata <= 256'd0;
             
             m_axi_awvalid <= 1'b0;
             m_axi_wvalid <= 1'b0;

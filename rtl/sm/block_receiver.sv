@@ -38,12 +38,6 @@ module block_receiver (
             state <= ST_IDLE;
             alloc.valid <= 1'b0;
             block_accepted <= 1'b0;
-            alloc.block_id <= 16'd0;
-            alloc.block_idx_x <= 16'd0;
-            alloc.block_idx_y <= 16'd0;
-            alloc.active_mask <= 32'hFFFFFFFF;
-            alloc.thread_id_start <= 16'd0;
-            warp_cnt <= 10'd0;
         end else begin
             case (state)
                 ST_IDLE: begin

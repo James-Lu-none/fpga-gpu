@@ -38,6 +38,14 @@ module processing_block (
     output wire [23:0] fb_rgb
 );
 
+    // Reset Pipeline (Level 3)
+    (* ASYNC_REG = "TRUE" *) reg core_rst_n_reg;
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) core_rst_n_reg <= 1'b0;
+        else        core_rst_n_reg <= 1'b1;
+    end
+    wire core_rst_n = core_rst_n_reg;
+
     // Tie-off Legacy Interfaces
     assign smem_raddr = 8'd0;
     assign smem_we = 1'b0;
@@ -80,7 +88,7 @@ module processing_block (
     // 1. Warp Context & Dynamic Scheduler
     warp_context u_warp_context (
         .clk (clk),
-        .rst_n (rst_n),
+        .rst_n (core_rst_n),
         .alloc (alloc),
         .issue (issue),
         .ctx_wb (ctx_wb)
@@ -89,7 +97,7 @@ module processing_block (
     // 2. Instruction Fetch & Decode
     fetch_decode u_fetch_decode (
         .clk (clk),
-        .rst_n (rst_n),
+        .rst_n (core_rst_n),
         .iram_we (iram_we),
         .iram_waddr (iram_waddr),
         .iram_wdata (iram_wdata),
@@ -100,7 +108,7 @@ module processing_block (
     // 3. Vector Register File (VRF)
     vector_regfile u_vector_regfile (
         .clk (clk),
-        .rst_n (rst_n),
+        .rst_n (core_rst_n),
         .decode (decode),
         .op (op),
         .wb (wb)
@@ -116,7 +124,7 @@ module processing_block (
 
     alu u_alu (
         .clk (clk),
-        .rst_n (rst_n),
+        .rst_n (core_rst_n),
         .op (op),
         .wb (alu_wb),
         .alu_updates_nzp (alu_updates_nzp),
@@ -129,7 +137,7 @@ module processing_block (
 
     pc u_pc (
         .clk (clk),
-        .rst_n (rst_n),
+        .rst_n (core_rst_n),
         .op (op),
         .alu_updates_nzp (alu_updates_nzp),
         .next_nzp0 (next_nzp0),
@@ -153,7 +161,7 @@ module processing_block (
 
     lsu u_lsu (
         .clk (clk),
-        .rst_n (rst_n),
+        .rst_n (core_rst_n),
         .op (op),
         .lsu_ready (lsu_ready),
         
@@ -171,7 +179,7 @@ module processing_block (
 
     l1_cache u_l1_cache (
         .clk (clk),
-        .rst_n (rst_n),
+        .rst_n (core_rst_n),
         
         .req_valid (l1_req_valid_int),
         .req_addr (l1_req_addr_int),

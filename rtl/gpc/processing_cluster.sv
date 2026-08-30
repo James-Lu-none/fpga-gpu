@@ -20,6 +20,14 @@ module processing_cluster (
     output wire [23:0] fb_rgb
 );
 
+    // Reset Pipeline (Level 1)
+    (* ASYNC_REG = "TRUE" *) reg gpc_rst_n_reg;
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) gpc_rst_n_reg <= 1'b0;
+        else        gpc_rst_n_reg <= 1'b1;
+    end
+    wire gpc_rst_n = gpc_rst_n_reg;
+
     // 1. AXI-Lite Register Decoder & Configuration
     reg [31:0] src_addr;
     reg [31:0] dst_addr;
@@ -44,8 +52,8 @@ module processing_cluster (
     wire grid_done_status;
     reg grid_done_reg;
 
-    always @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
+    always @(posedge clk or negedge gpc_rst_n) begin
+        if (!gpc_rst_n) begin
             hw_trigger <= 1'b0;
             grid_done_reg <= 1'b0;
             grid_dim_x <= 16'd1;
@@ -116,9 +124,9 @@ module processing_cluster (
     wire [15:0] sm_block_idx_y;
     wire [9:0] sm_warps_per_block;
 
-    thread_block_scheduler u_tbs (
+    thread_block_scheduler u_scheduler (
         .clk (clk),
-        .rst_n (rst_n),
+        .rst_n (gpc_rst_n),
         .start (hw_trigger),
         .grid_dim_x (grid_dim_x),
         .grid_dim_y (grid_dim_y),
@@ -169,7 +177,7 @@ module processing_cluster (
     // SM 0
     streaming_multiprocessor u_sm_0 (
         .clk (clk),
-        .rst_n (rst_n),
+        .rst_n (gpc_rst_n),
         .block_issue_valid (sm_block_issue_valid[0]),
         .block_idx_x (sm_block_idx_x),
         .block_idx_y (sm_block_idx_y),
@@ -225,7 +233,7 @@ module processing_cluster (
     // Shared L2 Cache & AXI4 Master
     l2_cache u_l2_cache (
         .clk (clk),
-        .rst_n (rst_n),
+        .rst_n (gpc_rst_n),
         
         .sm0_req_valid (sm0_l1_req_valid),
         .sm0_req_addr (sm0_l1_req_addr),

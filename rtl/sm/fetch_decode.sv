@@ -43,12 +43,6 @@ module fetch_decode (
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             issue_valid_q <= 1'b0;
-            issue_warp_id_q <= 4'd0;
-            issue_pc_q <= 12'd0;
-            issue_active_mask_q <= 32'd0;
-            issue_block_idx_x_q <= 16'd0;
-            issue_block_idx_y_q <= 16'd0;
-            issue_thread_id_start_q <= 16'd0;
         end else begin
             issue_valid_q <= issue.valid;
             issue_warp_id_q <= issue.warp_id;
@@ -79,18 +73,6 @@ module fetch_decode (
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             decode.valid <= 1'b0;
-            decode.warp_id <= 4'd0;
-            decode.pc <= 12'd0;
-            decode.active_mask <= 32'd0;
-            decode.block_idx_x <= 16'd0;
-            decode.block_idx_y <= 16'd0;
-            decode.thread_id_start <= 16'd0;
-            decode.opcode <= 8'd0;
-            decode.rd <= 5'd0;
-            decode.rs1 <= 5'd0;
-            decode.rs2 <= 5'd0;
-            decode.imm <= 32'd0;
-            decode.is_imm <= 1'b0;
         end else begin
             decode.valid <= issue_valid_q;
             

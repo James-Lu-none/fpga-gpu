@@ -38,12 +38,20 @@ module streaming_multiprocessor (
     output wire [23:0] fb_rgb
 );
 
+    // Reset Pipeline (Level 2)
+    (* ASYNC_REG = "TRUE" *) reg sm_rst_n_reg;
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) sm_rst_n_reg <= 1'b0;
+        else        sm_rst_n_reg <= 1'b1;
+    end
+    wire sm_rst_n = sm_rst_n_reg;
+
     // 1. Thread Block Receiver (Local Scheduler)
     warp_alloc_if alloc();
 
     block_receiver u_block_rx (
         .clk (clk),
-        .rst_n (rst_n),
+        .rst_n (sm_rst_n),
         .block_issue_valid (block_issue_valid),
         .block_idx_x (block_idx_x),
         .block_idx_y (block_idx_y),
@@ -64,7 +72,7 @@ module streaming_multiprocessor (
 
     processing_block u_sub_core (
         .clk (clk),
-        .rst_n (rst_n),
+        .rst_n (sm_rst_n),
         
         // I-RAM Loading
         .iram_we (iram_we),
