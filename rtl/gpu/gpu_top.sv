@@ -26,6 +26,17 @@ module gpu_top (
     input wire usr_irq_ack
 );
 
+    // Reset Synchronizer to resolve high fanout / recovery time violations
+    (* ASYNC_REG = "TRUE" *) reg [2:0] rst_sync_reg;
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            rst_sync_reg <= 3'b000;
+        end else begin
+            rst_sync_reg <= {rst_sync_reg[1:0], 1'b1};
+        end
+    end
+    wire sys_rst_n = rst_sync_reg[2];
+
     // Internal Interconnect
     // AXI-Lite connection between RISC-V CP and GPC
     axi_lite_if #(.ADDR_W(32), .DATA_W(32)) rv_gpu_axil();
@@ -38,8 +49,8 @@ module gpu_top (
     
     // Trigger IRQ pulse when Host writes to Mailbox Doorbell Address
     reg doorbell_irq_reg;
-    always @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
+    always @(posedge clk or negedge sys_rst_n) begin
+        if (!sys_rst_n) begin
             doorbell_irq_reg <= 1'b0;
         end else begin
             doorbell_irq_reg <= s_axi_lite.awvalid && s_axi_lite.wvalid && s_axi_lite.awready && (s_axi_lite.awaddr == `BRAM_MAILBOX_BASE);
@@ -56,7 +67,7 @@ module gpu_top (
         .STACKADDR(`BRAM_STACKADDR)
     ) u_picorv32 (
         .clk(clk),
-        .resetn(rst_n),
+        .resetn(sys_rst_n),
         .trap(internal_cp_trap),
 
         .mem_axi_awvalid(rv_axi.awvalid),
@@ -103,7 +114,7 @@ module gpu_top (
         .REGISTER_RESPONSES(1)
     ) u_decoder (
         .clk(clk),
-        .rst_n(rst_n),
+        .rst_n(sys_rst_n),
         .s_axi(rv_axi), // From RISC-V mem master
         .m0_axi(bram_axi), // To BRAM for CPU mem access
         .m1_axi(rv_gpu_axil) // To GPU SM register
@@ -126,8 +137,8 @@ module gpu_top (
     reg host_bvalid;
     reg host_rvalid;
 
-    always @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
+    always @(posedge clk or negedge sys_rst_n) begin
+        if (!sys_rst_n) begin
             host_bvalid <= 1'b0;
             host_rvalid <= 1'b0;
         end else begin
@@ -161,7 +172,7 @@ module gpu_top (
         .MEM_SIZE_BYTES(16384)
     ) u_bram (
         .clk(clk),
-        .rst_n(rst_n),
+        .rst_n(sys_rst_n),
 
         // Port A: RISC-V CPU
         .en_a(bram_axi.arvalid || (bram_axi.awvalid && bram_axi.wvalid)),
@@ -184,8 +195,8 @@ module gpu_top (
     
     wire trap_edge = internal_cp_trap & ~cp_trap_d;
 
-    always @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
+    always @(posedge clk or negedge sys_rst_n) begin
+        if (!sys_rst_n) begin
             cp_trap_d <= 1'b0;
             irq_req_reg <= 1'b0;
         end else begin
@@ -204,7 +215,7 @@ module gpu_top (
     // 2. Graphics Processing Cluster (Compute Plane)
     processing_cluster u_gpc (
         .clk (clk),
-        .rst_n (rst_n),
+        .rst_n (sys_rst_n),
         .s_axi_lite (rv_gpu_axil),
         .m_axi_gmem (m_axi_gmem),
         .fb_we (fb_we),
