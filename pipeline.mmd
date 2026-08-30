@@ -1,0 +1,55 @@
+sequenceDiagram
+    autonumber
+    actor Host as Host PC (PCIe)
+    participant BRAM as Mailbox (BRAM)
+    participant RV as RISC-V (Command Processor)
+    participant GPC as GPC (AXI-Lite & TBS)
+    participant SM as SM (Warp/ALU)
+    participant L1 as SM L1 Cache
+    participant L2 as GPC L2 Cache
+    participant DDR as DDR3 (Global Memory)
+
+    %% 任務發布
+    Host->>BRAM: 寫入 cuda_task_descriptor_t (XDMA)
+    BRAM-->>RV: 觸發 doorbell_irq 硬體中斷
+    
+    %% 配置與啟動
+    RV->>BRAM: 讀取 Grid/Block 維度與記憶體位址
+    RV->>GPC: 寫入暫存器 (AXI-Lite)
+    RV->>GPC: 寫入 REG_DOORBELL = 1 (啟動 hw_trigger)
+    
+    %% 動態排程
+    loop Thread Block Dispatch
+        SM-->>GPC: 回報 available_warp_slots
+        GPC->>SM: 派發 Block (block_idx, warps)
+        
+        Note over SM: block_receiver 將 Block 切成 Warps<br/>並放入 warp_context
+        
+        %% 運算與記憶體存取
+        loop Warp Execution Pipeline
+            Note over SM: Fetch -> Decode -> EX1 -> EX2 -> Write-Back
+            
+            %% Load/Store 指令
+            SM->>L1: LSU 發出記憶體請求
+            alt L1 Miss
+                L1->>L2: 轉發至 L2 Cache
+                alt L2 Miss
+                    L2->>DDR: 發起 AXI4-Full Burst
+                    DDR-->>L2: 回傳資料
+                end
+                L2-->>L1: 回傳至 L1 Cache
+            end
+            L1-->>SM: 資料到達 VRF
+        end
+        Note over SM: Warp 執行 EXIT 指令，釋放 Slot
+    end
+    
+    %% 完成與回報
+    GPC->>GPC: 偵測所有 SM 皆滿載空閒 (Slots == 16)
+    GPC->>RV: 拉起 grid_done_reg 旗標
+    
+    RV->>BRAM: 修改 Descriptor (標記 Done = 0x2)
+    RV->>RV: 執行 __builtin_trap()
+    
+    RV-->>Host: 透過 XDMA 送出 usr_irq_req 硬體中斷
+    Note over Host: Host Driver 收到中斷，讀取運算結果
