@@ -207,3 +207,12 @@ FPGA 專案的 Git 倉庫**只需要追蹤以下檔案**：
 *.ip_user_files/
 *.gen/
 ```
+
+### Tcl commands
+ 
+```bash
+# use pwd and cd to comfirm path before executing commands
+report_utilization -hierarchical -format xml -file ./utilization.xml
+report_timing -delay_type max -max_paths 50 -sort_by group -nworst 2 -file ./timing.txt
+
+```
