@@ -2,9 +2,9 @@
 // SM Fetch & Decode Stage (Programmable GPU)
 // Fetches instructions from I-RAM and decodes the custom 32-bit ISA.
 
-module fetch_decode #(
-    parameter IRAM_DEPTH = 4096
-)(
+import gpu_pkg::*;
+
+module fetch_decode (
     input wire clk,
     input wire rst_n,
 
@@ -14,28 +14,10 @@ module fetch_decode #(
     input wire [31:0] iram_wdata,
 
     // Issue Interface (From Warp Context)
-    input wire issue_valid,
-    input wire [3:0] issue_warp_id,
-    input wire [11:0] issue_pc,
-    input wire [31:0] issue_active_mask,
-    input wire [15:0] issue_block_idx_x,
-    input wire [15:0] issue_block_idx_y,
-    input wire [15:0] issue_thread_id_start,
+    issue_if.slave issue,
 
     // Decode Output Interface (To Execution Pipeline)
-    output reg decode_valid,
-    output reg [3:0] decode_warp_id,
-    output reg [11:0] decode_pc,
-    output reg [31:0] decode_active_mask,
-    output reg [15:0] decode_block_idx_x,
-    output reg [15:0] decode_block_idx_y,
-    output reg [15:0] decode_thread_id_start,
-    output reg [7:0] decode_opcode,
-    output reg [4:0] decode_rd, // Also used as COND for Branches
-    output reg [4:0] decode_rs1,
-    output reg [4:0] decode_rs2,
-    output reg [31:0] decode_imm,
-    output reg decode_is_imm
+    decode_if.master decode
 );
 
     // 1. Instruction Memory (I-RAM)
@@ -47,11 +29,11 @@ module fetch_decode #(
             iram[iram_waddr] <= iram_wdata;
         end
         // Implicit 1-cycle latency BRAM read
-        fetched_instr <= iram[issue_pc];
+        fetched_instr <= iram[issue.pc];
     end
 
     reg issue_valid_q;
-    reg [3:0] issue_warp_id_q;
+    reg [$clog2(MAX_WARPS)-1:0] issue_warp_id_q;
     reg [11:0] issue_pc_q;
     reg [31:0] issue_active_mask_q;
     reg [15:0] issue_block_idx_x_q;
@@ -68,13 +50,13 @@ module fetch_decode #(
             issue_block_idx_y_q <= 16'd0;
             issue_thread_id_start_q <= 16'd0;
         end else begin
-            issue_valid_q <= issue_valid;
-            issue_warp_id_q <= issue_warp_id;
-            issue_pc_q <= issue_pc;
-            issue_active_mask_q <= issue_active_mask;
-            issue_block_idx_x_q <= issue_block_idx_x;
-            issue_block_idx_y_q <= issue_block_idx_y;
-            issue_thread_id_start_q <= issue_thread_id_start;
+            issue_valid_q <= issue.valid;
+            issue_warp_id_q <= issue.warp_id;
+            issue_pc_q <= issue.pc;
+            issue_active_mask_q <= issue.active_mask;
+            issue_block_idx_x_q <= issue.block_idx_x;
+            issue_block_idx_y_q <= issue.block_idx_y;
+            issue_thread_id_start_q <= issue.thread_id_start;
         end
     end
 
@@ -96,41 +78,41 @@ module fetch_decode #(
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            decode_valid <= 1'b0;
-            decode_warp_id <= 4'd0;
-            decode_pc <= 12'd0;
-            decode_active_mask <= 32'd0;
-            decode_block_idx_x <= 16'd0;
-            decode_block_idx_y <= 16'd0;
-            decode_thread_id_start <= 16'd0;
-            decode_opcode <= 8'd0;
-            decode_rd <= 5'd0;
-            decode_rs1 <= 5'd0;
-            decode_rs2 <= 5'd0;
-            decode_imm <= 32'd0;
-            decode_is_imm <= 1'b0;
+            decode.valid <= 1'b0;
+            decode.warp_id <= 4'd0;
+            decode.pc <= 12'd0;
+            decode.active_mask <= 32'd0;
+            decode.block_idx_x <= 16'd0;
+            decode.block_idx_y <= 16'd0;
+            decode.thread_id_start <= 16'd0;
+            decode.opcode <= 8'd0;
+            decode.rd <= 5'd0;
+            decode.rs1 <= 5'd0;
+            decode.rs2 <= 5'd0;
+            decode.imm <= 32'd0;
+            decode.is_imm <= 1'b0;
         end else begin
-            decode_valid <= issue_valid_q;
+            decode.valid <= issue_valid_q;
             
-            decode_warp_id <= issue_warp_id_q;
-            decode_pc <= issue_pc_q;
-            decode_active_mask <= issue_active_mask_q;
-            decode_block_idx_x <= issue_block_idx_x_q;
-            decode_block_idx_y <= issue_block_idx_y_q;
-            decode_thread_id_start <= issue_thread_id_start_q;
+            decode.warp_id <= issue_warp_id_q;
+            decode.pc <= issue_pc_q;
+            decode.active_mask <= issue_active_mask_q;
+            decode.block_idx_x <= issue_block_idx_x_q;
+            decode.block_idx_y <= issue_block_idx_y_q;
+            decode.thread_id_start <= issue_thread_id_start_q;
             
             if (issue_valid_q) begin
-                decode_opcode <= op;
-                decode_rd <= rd;
-                decode_rs1 <= rs1;
-                decode_rs2 <= rs2;
-                decode_is_imm <= is_imm_inst;
+                decode.opcode <= op;
+                decode.rd <= rd;
+                decode.rs1 <= rs1;
+                decode.rs2 <= rs2;
+                decode.is_imm <= is_imm_inst;
                 
                 // Sign-extend immediate based on instruction type
                 if (is_j_type) begin
-                    decode_imm <= {{13{imm19[18]}}, imm19};
+                    decode.imm <= {{13{imm19[18]}}, imm19};
                 end else begin
-                    decode_imm <= {{18{imm14[13]}}, imm14};
+                    decode.imm <= {{18{imm14[13]}}, imm14};
                 end
             end
         end

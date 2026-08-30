@@ -27,55 +27,19 @@
 // Manages the registers for all resident warps.
 // Uses duplicated BRAMs to provide 2 Read Ports and 1 Write Port.
 
-module vector_regfile #(
-    parameter MAX_WARPS = 16,
-    parameter NUM_REGS = 32,
-    parameter DATA_W = 64 // 2 lanes x 32-bit for now
-)(
+import gpu_pkg::*;
+
+module vector_regfile (
     input wire clk,
     input wire rst_n,
 
     // Decode Interface (From fetch_decode)
-    input wire decode_valid,
-    input wire [3:0] decode_warp_id,
-    input wire [11:0] decode_pc,
-    input wire [31:0] decode_active_mask,
-    input wire [15:0] decode_block_idx_x,
-    input wire [15:0] decode_block_idx_y,
-    input wire [15:0] decode_thread_id_start,
-    input wire [7:0] decode_opcode,
-
-    // address space is 2^5 = 32 registers (R0~R31)
-    // so in assembly, we only need 5 bits to address the registers
-    // and only can use R0~R31
-    input wire [4:0] decode_rd,
-    input wire [4:0] decode_rs1,
-    input wire [4:0] decode_rs2,
-
-    input wire [31:0] decode_imm,
-    input wire decode_is_imm,
-
+    decode_if.slave decode,
     // Operand Interface (To sm_execution_pipe)
-    output reg op_valid,
-    output reg [3:0] op_warp_id,
-    output reg [11:0] op_pc,
-    output reg [31:0] op_active_mask,
-    output reg [15:0] op_block_idx_x,
-    output reg [15:0] op_block_idx_y,
-    output reg [15:0] op_thread_id_start,
-    output reg [7:0] op_opcode,
-    output reg [4:0] op_rd,
-    output reg [31:0] op_imm,
-    output reg op_is_imm,
-    output reg [63:0] op_rs1_data, // Vector Data (64-bit)
-    output reg [63:0] op_rs2_data, // Vector Data (64-bit)
+    operand_if.master op,
     
     // Write-Back Interface (From sm_execution_pipe)
-    input wire wb_valid,
-    input wire [3:0] wb_warp_id,
-    input wire [4:0] wb_rd,
-    input wire [63:0] wb_data,
-    input wire [31:0] wb_mask // Per-lane write mask (Optional for pure register files)
+    wb_if.slave wb
 );
 
     // Total registers = 16 warps * 32 regs = 512 entries
@@ -88,16 +52,16 @@ module vector_regfile #(
     (* ram_style = "block" *) reg [DATA_W-1:0] ram_rs1 [0:RAM_DEPTH-1];
     (* ram_style = "block" *) reg [DATA_W-1:0] ram_rs2 [0:RAM_DEPTH-1];
 
-    wire [8:0] addr_rs1 = {decode_warp_id, decode_rs1};
-    wire [8:0] addr_rs2 = {decode_warp_id, decode_rs2};
-    wire [8:0] addr_wb = {wb_warp_id, wb_rd};
+    wire [7:0] addr_rs1 = {decode.warp_id, decode.rs1};
+    wire [7:0] addr_rs2 = {decode.warp_id, decode.rs2};
+    wire [7:0] addr_wb = {wb.warp_id, wb.rd};
 
     reg [DATA_W-1:0] rs1_data_read;
     reg [DATA_W-1:0] rs2_data_read;
 
     // Pipeline registers for control signals
     reg decode_valid_q;
-    reg [3:0] decode_warp_id_q;
+    reg [$clog2(MAX_WARPS)-1:0] decode_warp_id_q;
     reg [11:0] decode_pc_q;
     reg [31:0] decode_active_mask_q;
     reg [7:0] decode_opcode_q;
@@ -114,10 +78,10 @@ module vector_regfile #(
         // This handles the "1 Write". When the execution pipeline finishes a computation,
         // it provides the result (wb_data) and the destination register (wb_rd).
         // We write this data into BOTH ram_rs1 and ram_rs2 at the same time to keep them synced.
-        if (wb_valid && (wb_rd != 5'd0)) begin // Assuming R0 is read-only zero or normal reg
+        if (wb.valid && (wb.rd != 5'd0)) begin // Assuming R0 is read-only zero or normal reg
             // alus will write back in format {alu1_out, alu0_out}
-            ram_rs1[addr_wb] <= wb_data;
-            ram_rs2[addr_wb] <= wb_data;
+            ram_rs1[addr_wb] <= wb.data;
+            ram_rs2[addr_wb] <= wb.data;
         end
 
         // Read Ports (1 cycle latency)
@@ -146,53 +110,53 @@ module vector_regfile #(
             decode_block_idx_y_q <= 16'd0;
             decode_thread_id_start_q <= 16'd0;
         end else begin
-            decode_valid_q <= decode_valid;
-            decode_warp_id_q <= decode_warp_id;
-            decode_pc_q <= decode_pc;
-            decode_active_mask_q <= decode_active_mask;
-            decode_opcode_q <= decode_opcode;
-            decode_rd_q <= decode_rd;
-            decode_imm_q <= decode_imm;
-            decode_is_imm_q <= decode_is_imm;
-            decode_block_idx_x_q <= decode_block_idx_x;
-            decode_block_idx_y_q <= decode_block_idx_y;
-            decode_thread_id_start_q <= decode_thread_id_start;
+            decode_valid_q <= decode.valid;
+            decode_warp_id_q <= decode.warp_id;
+            decode_pc_q <= decode.pc;
+            decode_active_mask_q <= decode.active_mask;
+            decode_opcode_q <= decode.opcode;
+            decode_rd_q <= decode.rd;
+            decode_imm_q <= decode.imm;
+            decode_is_imm_q <= decode.is_imm;
+            decode_block_idx_x_q <= decode.block_idx_x;
+            decode_block_idx_y_q <= decode.block_idx_y;
+            decode_thread_id_start_q <= decode.thread_id_start;
         end
     end
 
     // Operand Formatting (Output to ALU)
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            op_valid <= 1'b0;
-            op_warp_id <= 4'd0;
-            op_pc <= 12'd0;
-            op_active_mask <= 32'd0;
-            op_block_idx_x <= 16'd0;
-            op_block_idx_y <= 16'd0;
-            op_thread_id_start <= 16'd0;
-            op_opcode <= 8'd0;
-            op_rd <= 5'd0;
-            op_imm <= 32'd0;
-            op_is_imm <= 1'b0;
-            op_rs1_data <= 64'd0;
-            op_rs2_data <= 64'd0;
+            op.valid <= 1'b0;
+            op.warp_id <= 4'd0;
+            op.pc <= 12'd0;
+            op.active_mask <= 32'd0;
+            op.block_idx_x <= 16'd0;
+            op.block_idx_y <= 16'd0;
+            op.thread_id_start <= 16'd0;
+            op.opcode <= 8'd0;
+            op.rd <= 5'd0;
+            op.imm <= 32'd0;
+            op.is_imm <= 1'b0;
+            op.rs1_data <= 64'd0;
+            op.rs2_data <= 64'd0;
         end else begin
-            op_valid <= decode_valid_q;
+            op.valid <= decode_valid_q;
             
             if (decode_valid_q) begin
-                op_warp_id <= decode_warp_id_q;
-                op_pc <= decode_pc_q;
-                op_active_mask <= decode_active_mask_q;
-                op_block_idx_x <= decode_block_idx_x_q;
-                op_block_idx_y <= decode_block_idx_y_q;
-                op_thread_id_start <= decode_thread_id_start_q;
-                op_opcode <= decode_opcode_q;
-                op_rd <= decode_rd_q;
-                op_imm <= decode_imm_q;
-                op_is_imm <= decode_is_imm_q;
+                op.warp_id <= decode_warp_id_q;
+                op.pc <= decode_pc_q;
+                op.active_mask <= decode_active_mask_q;
+                op.block_idx_x <= decode_block_idx_x_q;
+                op.block_idx_y <= decode_block_idx_y_q;
+                op.thread_id_start <= decode_thread_id_start_q;
+                op.opcode <= decode_opcode_q;
+                op.rd <= decode_rd_q;
+                op.imm <= decode_imm_q;
+                op.is_imm <= decode_is_imm_q;
                 
-                op_rs1_data <= rs1_data_read;
-                op_rs2_data <= rs2_data_read;
+                op.rs1_data <= rs1_data_read;
+                op.rs2_data <= rs2_data_read;
             end
         end
     end

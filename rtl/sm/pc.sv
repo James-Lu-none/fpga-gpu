@@ -10,19 +10,14 @@
 // others, a "Divergence" occurs. The PC module generates a `taken_mask` 
 // and a `not_taken_mask` to split the warp.
 
-module pc #(
-    parameter MAX_WARPS = 16
-)(
+import gpu_pkg::*;
+
+module pc (
     input wire clk,
     input wire rst_n,
 
     // Operand Interface
-    input wire op_valid,
-    input wire [3:0] op_warp_id,
-    input wire [11:0] op_pc,
-    input wire [31:0] op_active_mask,
-    input wire [4:0] op_rd, // for branch cond
-    input wire [31:0] op_imm,
+    operand_if.slave op,
 
     // From ALU
     input wire alu_updates_nzp,
@@ -33,14 +28,7 @@ module pc #(
     input wire is_sync,
 
     // Context Write-Back (Signals sent to the warp_context scheduler)
-    output reg ctx_wb_valid,
-    output reg [3:0] ctx_wb_warp_id,
-    output reg [11:0] ctx_wb_next_pc,
-    output reg ctx_wb_is_done,
-    output reg [31:0] ctx_wb_taken_mask,
-    output reg [31:0] ctx_wb_not_taken_mask,
-    output reg ctx_wb_is_divergent,
-    output reg ctx_wb_is_sync
+    ctx_wb_if.master ctx_wb
 );
 
     // NZP Registers (Condition Codes per Warp, Per Lane)
@@ -57,62 +45,62 @@ module pc #(
     end
 
     // Combinational Branch Evaluator
-    wire [2:0] branch_cond = op_rd[2:0];
-    wire branch_take0 = ((branch_cond & warp_nzp[op_warp_id][0]) != 3'b000) && op_active_mask[0];
-    wire branch_take1 = ((branch_cond & warp_nzp[op_warp_id][1]) != 3'b000) && op_active_mask[1];
+    wire [2:0] branch_cond = op.rd[2:0];
+    wire branch_take0 = ((branch_cond & warp_nzp[op.warp_id][0]) != 3'b000) && op.active_mask[0];
+    wire branch_take1 = ((branch_cond & warp_nzp[op.warp_id][1]) != 3'b000) && op.active_mask[1];
     
     wire [31:0] comb_taken_mask = {30'd0, branch_take1, branch_take0};
-    wire [31:0] comb_not_taken_mask = op_active_mask & ~comb_taken_mask;
+    wire [31:0] comb_not_taken_mask = op.active_mask & ~comb_taken_mask;
 
     // Pipeline Register (Execution -> Write-Back)
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            ctx_wb_valid <= 1'b0;
-            ctx_wb_warp_id <= 4'd0;
-            ctx_wb_next_pc <= 12'd0;
-            ctx_wb_is_done <= 1'b0;
-            ctx_wb_taken_mask <= 32'd0;
-            ctx_wb_not_taken_mask <= 32'd0;
-            ctx_wb_is_divergent <= 1'b0;
-            ctx_wb_is_sync <= 1'b0;
+            ctx_wb.valid <= 1'b0;
+            ctx_wb.warp_id <= 4'd0;
+            ctx_wb.next_pc <= 12'd0;
+            ctx_wb.is_done <= 1'b0;
+            ctx_wb.taken_mask <= 32'd0;
+            ctx_wb.not_taken_mask <= 32'd0;
+            ctx_wb.is_divergent <= 1'b0;
+            ctx_wb.is_sync <= 1'b0;
         end else begin
-            ctx_wb_valid <= 1'b0;
-            ctx_wb_is_divergent <= 1'b0;
-            ctx_wb_is_sync <= 1'b0;
+            ctx_wb.valid <= 1'b0;
+            ctx_wb.is_divergent <= 1'b0;
+            ctx_wb.is_sync <= 1'b0;
 
-            if (op_valid) begin
+            if (op.valid) begin
                 // 1. Update NZP Register
                 if (alu_updates_nzp) begin
-                    if (op_active_mask[0]) warp_nzp[op_warp_id][0] <= next_nzp0;
-                    if (op_active_mask[1]) warp_nzp[op_warp_id][1] <= next_nzp1;
+                    if (op.active_mask[0]) warp_nzp[op.warp_id][0] <= next_nzp0;
+                    if (op.active_mask[1]) warp_nzp[op.warp_id][1] <= next_nzp1;
                 end
 
                 // 2. PC & State Update
-                ctx_wb_valid <= 1'b1;
-                ctx_wb_warp_id <= op_warp_id;
-                ctx_wb_is_done <= is_exit;
+                ctx_wb.valid <= 1'b1;
+                ctx_wb.warp_id <= op.warp_id;
+                ctx_wb.is_done <= is_exit;
                 
                 // Branch & Sync Logic (Divergence Tester)
                 if (is_sync) begin
-                    ctx_wb_is_sync <= 1'b1;
-                    ctx_wb_next_pc <= op_pc + 12'd1;
+                    ctx_wb.is_sync <= 1'b1;
+                    ctx_wb.next_pc <= op.pc + 12'd1;
                 end else if (is_branch) begin
                     if (comb_taken_mask != 32'd0 && comb_not_taken_mask != 32'd0) begin
                         // Divergence!
-                        ctx_wb_is_divergent <= 1'b1;
-                        ctx_wb_taken_mask <= comb_taken_mask;
-                        ctx_wb_not_taken_mask <= comb_not_taken_mask;
-                        ctx_wb_next_pc <= op_pc + op_imm[11:0]; // Taken path executes first
+                        ctx_wb.is_divergent <= 1'b1;
+                        ctx_wb.taken_mask <= comb_taken_mask;
+                        ctx_wb.not_taken_mask <= comb_not_taken_mask;
+                        ctx_wb.next_pc <= op.pc + op.imm[11:0]; // Taken path executes first
                     end else if (comb_taken_mask != 32'd0) begin
                         // All active threads take the branch (No Divergence)
-                        ctx_wb_next_pc <= op_pc + op_imm[11:0];
+                        ctx_wb.next_pc <= op.pc + op.imm[11:0];
                     end else begin
                         // All active threads don't take the branch
-                        ctx_wb_next_pc <= op_pc + 12'd1;
+                        ctx_wb.next_pc <= op.pc + 12'd1;
                     end
                 end else begin
                     // Normal execution
-                    ctx_wb_next_pc <= op_pc + 12'd1;
+                    ctx_wb.next_pc <= op.pc + 12'd1;
                 end
             end
         end

@@ -3,10 +3,9 @@
 // Dynamic Thread Block Scheduler (TBS) / GigaThread Engine
 // Dispatches Thread Blocks to SMs based on runtime resource availability.
 
-module thread_block_scheduler #(
-    parameter NUM_SMS = 2,
-    parameter MAX_WARP_SLOTS_PER_SM = 16
-)(
+import gpu_pkg::*;
+
+module thread_block_scheduler (
     input wire clk,
     input wire rst_n,
 
@@ -77,7 +76,7 @@ module thread_block_scheduler #(
     always @(*) begin
         all_idle = 1'b1;
         for (j = 0; j < NUM_SMS; j = j + 1) begin
-            if (sm_slots[j] != MAX_WARP_SLOTS_PER_SM[4:0]) begin
+            if (sm_slots[j] != MAX_WARPS[4:0]) begin
                 all_idle = 1'b0;
             end
         end

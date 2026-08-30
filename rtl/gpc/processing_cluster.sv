@@ -2,9 +2,9 @@
 // Graphics Processing Cluster (GPC)
 // Wraps Multiple Streaming Multiprocessors (SMs) and the GigaThread Engine
 
-module processing_cluster #(
-    parameter NUM_SMS = 2
-)(
+import gpu_pkg::*;
+
+module processing_cluster (
     input wire clk,
     input wire rst_n,
 
@@ -116,10 +116,7 @@ module processing_cluster #(
     wire [15:0] sm_block_idx_y;
     wire [9:0] sm_warps_per_block;
 
-    thread_block_scheduler #(
-        .NUM_SMS(NUM_SMS),
-        .MAX_WARP_SLOTS_PER_SM(16)
-    ) u_tbs (
+    thread_block_scheduler u_tbs (
         .clk (clk),
         .rst_n (rst_n),
         .start (hw_trigger),
@@ -161,12 +158,13 @@ module processing_cluster #(
     wire [23:0] sm0_fb_rgb;
     wire [4:0] sm0_slots;
 
-    wire sm1_fb_we;
-    wire [18:0] sm1_fb_addr;
-    wire [23:0] sm1_fb_rgb;
-    wire [4:0] sm1_slots;
+    wire sm1_fb_we = 1'b0;
+    wire [18:0] sm1_fb_addr = 19'd0;
+    wire [23:0] sm1_fb_rgb = 24'd0;
+    wire [4:0] sm1_slots = 5'd0;
 
-    assign sm_available_warp_slots = {sm1_slots, sm0_slots};
+    // assign sm_available_warp_slots = {sm1_slots, sm0_slots};
+    assign sm_available_warp_slots = {sm1_slots};
 
     // SM 0
     streaming_multiprocessor u_sm_0 (
@@ -196,33 +194,33 @@ module processing_cluster #(
         .fb_rgb (sm0_fb_rgb)
     );
 
-    // SM 1
-    streaming_multiprocessor u_sm_1 (
-        .clk (clk),
-        .rst_n (rst_n),
-        .block_issue_valid (sm_block_issue_valid[1]),
-        .block_idx_x (sm_block_idx_x),
-        .block_idx_y (sm_block_idx_y),
-        .warps_per_block (sm_warps_per_block),
-        .block_accepted (sm_block_accepted[1]),
-        .available_warp_slots (sm1_slots),
-        .dma_src_addr (src_addr),
-        .dma_dst_addr (dst_addr),
-        .iram_we (iram_we_reg),
-        .iram_waddr (iram_waddr_reg),
-        .iram_wdata (iram_wdata_reg),
-        .l1_req_valid (sm1_l1_req_valid),
-        .l1_req_addr (sm1_l1_req_addr),
-        .l1_req_wdata (sm1_l1_req_wdata),
-        .l1_req_wstrb (sm1_l1_req_wstrb),
-        .l1_req_we (sm1_l1_req_we),
-        .l1_req_ready (sm1_l1_req_ready),
-        .l1_rsp_valid (sm1_l1_rsp_valid),
-        .l1_rsp_rdata (sm1_rsp_rdata),
-        .fb_we (sm1_fb_we),
-        .fb_addr (sm1_fb_addr),
-        .fb_rgb (sm1_fb_rgb)
-    );
+    // // SM 1
+    // streaming_multiprocessor u_sm_1 (
+    //     .clk (clk),
+    //     .rst_n (rst_n),
+    //     .block_issue_valid (sm_block_issue_valid[1]),
+    //     .block_idx_x (sm_block_idx_x),
+    //     .block_idx_y (sm_block_idx_y),
+    //     .warps_per_block (sm_warps_per_block),
+    //     .block_accepted (sm_block_accepted[1]),
+    //     .available_warp_slots (sm1_slots),
+    //     .dma_src_addr (src_addr),
+    //     .dma_dst_addr (dst_addr),
+    //     .iram_we (iram_we_reg),
+    //     .iram_waddr (iram_waddr_reg),
+    //     .iram_wdata (iram_wdata_reg),
+    //     .l1_req_valid (sm1_l1_req_valid),
+    //     .l1_req_addr (sm1_l1_req_addr),
+    //     .l1_req_wdata (sm1_l1_req_wdata),
+    //     .l1_req_wstrb (sm1_l1_req_wstrb),
+    //     .l1_req_we (sm1_l1_req_we),
+    //     .l1_req_ready (sm1_l1_req_ready),
+    //     .l1_rsp_valid (sm1_l1_rsp_valid),
+    //     .l1_rsp_rdata (sm1_rsp_rdata),
+    //     .fb_we (sm1_fb_we),
+    //     .fb_addr (sm1_fb_addr),
+    //     .fb_rgb (sm1_fb_rgb)
+    // );
 
     // Shared L2 Cache & AXI4 Master
     l2_cache u_l2_cache (

@@ -4,9 +4,9 @@
 // Receives a single Thread Block from the global TBS and slices it into
 // Warps, allocating them into the local warp_context.
 
-module block_receiver #(
-    parameter integer WARP_SIZE = 32
-)(
+import gpu_pkg::*;
+
+module block_receiver (
     input wire clk,
     input wire rst_n,
 
@@ -19,14 +19,7 @@ module block_receiver #(
     output reg block_accepted,
 
     // Warp Allocation Interface (To warp_context)
-    output reg warp_valid,
-    input wire warp_ready, // Has at least 1 free slot
-    output reg [15:0] current_warp_id,
-    output reg [15:0] current_block_id, // Linearized Block ID
-    output reg [15:0] alloc_block_idx_x,
-    output reg [15:0] alloc_block_idx_y,
-    output reg [31:0] active_mask, 
-    output reg [15:0] thread_id_start 
+    warp_alloc_if.master alloc
 );
 
     localparam ST_IDLE = 3'd0;
@@ -43,19 +36,18 @@ module block_receiver #(
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             state <= ST_IDLE;
-            warp_valid <= 1'b0;
+            alloc.valid <= 1'b0;
             block_accepted <= 1'b0;
-            current_warp_id <= 16'd0;
-            current_block_id <= 16'd0;
-            alloc_block_idx_x <= 16'd0;
-            alloc_block_idx_y <= 16'd0;
-            active_mask <= 32'hFFFFFFFF;
-            thread_id_start <= 16'd0;
+            alloc.block_id <= 16'd0;
+            alloc.block_idx_x <= 16'd0;
+            alloc.block_idx_y <= 16'd0;
+            alloc.active_mask <= 32'hFFFFFFFF;
+            alloc.thread_id_start <= 16'd0;
             warp_cnt <= 10'd0;
         end else begin
             case (state)
                 ST_IDLE: begin
-                    warp_valid <= 1'b0;
+                    alloc.valid <= 1'b0;
                     block_accepted <= 1'b0;
                     if (block_issue_valid) begin
                         warp_cnt <= 10'd0;
@@ -66,25 +58,24 @@ module block_receiver #(
 
                 ST_ISSUE_WARP: begin
                     block_accepted <= 1'b0; // Deassert ack
-                    warp_valid <= 1'b1;
-                    current_block_id <= linear_block_id;
-                    alloc_block_idx_x <= block_idx_x;
-                    alloc_block_idx_y <= block_idx_y;
-                    current_warp_id <= warp_cnt;
-                    thread_id_start <= warp_cnt * WARP_SIZE; // Thread offset within the block
+                    alloc.valid <= 1'b1;
+                    alloc.block_id <= linear_block_id;
+                    alloc.block_idx_x <= block_idx_x;
+                    alloc.block_idx_y <= block_idx_y;
+                    alloc.thread_id_start <= warp_cnt * WARP_SIZE; // Thread offset within the block
 
                     // Active Mask Calculation for boundary Warps
                     // Simplified: assume full warps for now, or use a bitmask generator if thread count is not a multiple of 32.
-                    active_mask <= 32'hFFFFFFFF;
+                    alloc.active_mask <= 32'hFFFFFFFF;
 
-                    if (warp_ready) begin
+                    if (alloc.ready) begin
                         state <= ST_WAIT_WARP;
                     end
                 end
 
                 ST_WAIT_WARP: begin
-                    warp_valid <= 1'b0;
-                    if (warp_ready) begin
+                    alloc.valid <= 1'b0;
+                    if (alloc.ready) begin
                         state <= ST_NEXT_WARP;
                     end
                 end

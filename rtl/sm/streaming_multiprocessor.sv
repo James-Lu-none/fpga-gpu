@@ -39,14 +39,7 @@ module streaming_multiprocessor (
 );
 
     // 1. Thread Block Receiver (Local Scheduler)
-    wire warp_valid;
-    wire warp_ready;
-    wire [15:0] current_warp_id;
-    wire [15:0] current_block_id;
-    wire [15:0] alloc_block_idx_x;
-    wire [15:0] alloc_block_idx_y;
-    wire [31:0] active_mask;
-    wire [15:0] thread_id_start;
+    warp_alloc_if alloc();
 
     block_receiver u_block_rx (
         .clk (clk),
@@ -57,15 +50,10 @@ module streaming_multiprocessor (
         .warps_per_block (warps_per_block),
         .block_accepted (block_accepted),
         
-        .warp_valid (warp_valid),
-        .warp_ready (warp_ready),
-        .current_warp_id (current_warp_id),
-        .current_block_id (current_block_id),
-        .alloc_block_idx_x (alloc_block_idx_x),
-        .alloc_block_idx_y (alloc_block_idx_y),
-        .active_mask (active_mask),
-        .thread_id_start (thread_id_start)
+        .alloc (alloc)
     );
+    
+    assign available_warp_slots = alloc.available_slots;
 
     // 2. Sub-Core (Processing Block)
     wire sm_smem_we;
@@ -84,14 +72,7 @@ module streaming_multiprocessor (
         .iram_wdata (iram_wdata),
 
         // Warp Allocation
-        .alloc_valid (warp_valid),
-        .alloc_ready (warp_ready),
-        .available_warp_slots (available_warp_slots), // NEW
-        .alloc_block_id (current_block_id),
-        .alloc_block_idx_x (alloc_block_idx_x),
-        .alloc_block_idx_y (alloc_block_idx_y),
-        .alloc_thread_id_start (thread_id_start),
-        .alloc_active_mask (active_mask),
+        .alloc (alloc),
         
         .l1_req_valid (l1_req_valid),
         .l1_req_addr (l1_req_addr),

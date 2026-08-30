@@ -7,18 +7,14 @@
 // can immediately issue instructions from OTHER warps, hiding memory latency.
 //
 
+import gpu_pkg::*;
+
 module lsu (
     input wire clk,
     input wire rst_n,
 
     // Operand Interface (From Dispatcher / VRF)
-    input wire op_valid,
-    input wire [3:0] op_warp_id,
-    input wire [11:0] op_pc,
-    input wire [7:0] op_opcode,
-    input wire [4:0] op_rd,
-    input wire [63:0] op_rs1_data, // Address (Lane 0)
-    input wire [63:0] op_rs2_data, // Store Data
+    operand_if.slave op,
     output wire lsu_ready, // LSU can accept new instruction
 
     // L1 Cache Interface
@@ -32,11 +28,8 @@ module lsu (
     input wire [63:0] l1_rsp_rdata,
 
     // Write-Back Interface (To VRF and Context Scheduler)
-    output reg lsu_wb_valid,
-    output reg [3:0] lsu_wb_warp_id,
-    output reg [11:0] lsu_wb_next_pc,
-    output reg [4:0] lsu_wb_rd,
-    output reg [63:0] lsu_wb_data
+    wb_if.master wb,
+    ctx_wb_if.master ctx_wb
 );
 
     localparam OP_LDR = 8'hA0;
@@ -48,7 +41,7 @@ module lsu (
     localparam STATE_WAIT = 1'b1;
 
     reg state;
-    reg [3:0] active_warp_id;
+    reg [$clog2(MAX_WARPS)-1:0] active_warp_id;
     reg [11:0] active_pc;
     reg [4:0] active_rd;
     reg is_load;
@@ -58,7 +51,7 @@ module lsu (
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             state <= STATE_IDLE;
-            active_warp_id <= 4'd0;
+            active_warp_id <= 0;
             active_pc <= 12'd0;
             active_rd <= 5'd0;
             is_load <= 1'b0;
@@ -68,28 +61,38 @@ module lsu (
             l1_req_wdata <= 64'd0;
             l1_req_we <= 1'b0;
             
-            lsu_wb_valid <= 1'b0;
-            lsu_wb_warp_id <= 4'd0;
-            lsu_wb_next_pc <= 12'd0;
-            lsu_wb_rd <= 5'd0;
-            lsu_wb_data <= 64'd0;
+            wb.valid <= 1'b0;
+            wb.warp_id <= 4'd0;
+            wb.rd <= 5'd0;
+            wb.data <= 64'd0;
+            wb.mask <= 32'hFFFFFFFF;
+            
+            ctx_wb.valid <= 1'b0;
+            ctx_wb.warp_id <= 4'd0;
+            ctx_wb.next_pc <= 12'd0;
+            ctx_wb.is_done <= 1'b0;
+            ctx_wb.is_divergent <= 1'b0;
+            ctx_wb.taken_mask <= 32'hFFFFFFFF;
+            ctx_wb.not_taken_mask <= 32'd0;
+            ctx_wb.is_sync <= 1'b0;
         end else begin
             // Default de-asserts
-            lsu_wb_valid <= 1'b0;
+            wb.valid <= 1'b0;
+            ctx_wb.valid <= 1'b0;
             
             case (state)
                 STATE_IDLE: begin
-                    if (op_valid && lsu_ready) begin
-                        if (op_opcode == OP_LDR || op_opcode == OP_STR) begin
+                    if (op.valid && lsu_ready) begin
+                        if (op.opcode == OP_LDR || op.opcode == OP_STR) begin
                             l1_req_valid <= 1'b1;
-                            l1_req_addr <= op_rs1_data[31:0]; // Use Lane 0 RS1 as Address
-                            l1_req_wdata <= op_rs2_data; // Write data
-                            l1_req_we <= (op_opcode == OP_STR);
+                            l1_req_addr <= op.rs1_data[31:0]; // Use Lane 0 RS1 as Address
+                            l1_req_wdata <= op.rs2_data; // Write data
+                            l1_req_we <= (op.opcode == OP_STR);
                             
-                            active_warp_id <= op_warp_id;
-                            active_pc <= op_pc;
-                            active_rd <= op_rd;
-                            is_load <= (op_opcode == OP_LDR);
+                            active_warp_id <= op.warp_id;
+                            active_pc <= op.pc;
+                            active_rd <= op.rd;
+                            is_load <= (op.opcode == OP_LDR);
                             
                             state <= STATE_WAIT;
                         end
@@ -104,17 +107,19 @@ module lsu (
                     if (l1_rsp_valid) begin
                         // L1 operation completed
                         if (is_load && (active_rd != 5'd0)) begin
-                            lsu_wb_valid <= 1'b1;
-                            lsu_wb_warp_id <= active_warp_id;
-                            lsu_wb_next_pc <= active_pc + 12'd1;
-                            lsu_wb_rd <= active_rd;
-                            lsu_wb_data <= l1_rsp_rdata;
+                            wb.valid <= 1'b1;
+                            wb.warp_id <= active_warp_id;
+                            wb.rd <= active_rd;
+                            wb.data <= l1_rsp_rdata;
+                            
+                            ctx_wb.valid <= 1'b1;
+                            ctx_wb.warp_id <= active_warp_id;
+                            ctx_wb.next_pc <= active_pc + 12'd1;
                         end else begin
                             // Store or dummy load
-                            lsu_wb_valid <= 1'b1; // Still need to wake up the warp
-                            lsu_wb_warp_id <= active_warp_id;
-                            lsu_wb_next_pc <= active_pc + 12'd1;
-                            lsu_wb_rd <= 5'd0;
+                            ctx_wb.valid <= 1'b1; // Still need to wake up the warp
+                            ctx_wb.warp_id <= active_warp_id;
+                            ctx_wb.next_pc <= active_pc + 12'd1;
                         end
                         state <= STATE_IDLE;
                     end

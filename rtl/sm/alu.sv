@@ -7,30 +7,17 @@
 // It processes multiple lanes in parallel
 //
 
-module alu #(
-    parameter DATA_W = 64
-)(
+import gpu_pkg::*;
+
+module alu (
     input wire clk,
     input wire rst_n,
 
     // Operand Interface
-    input wire op_valid,
-    input wire [3:0] op_warp_id,
-    input wire [15:0] op_block_idx_x,
-    input wire [15:0] op_block_idx_y,
-    input wire [15:0] op_thread_id_start,
-    input wire [7:0] op_opcode,
-    input wire [4:0] op_rd,
-    input wire [31:0] op_imm,
-    input wire op_is_imm,
-    input wire [63:0] op_rs1_data,
-    input wire [63:0] op_rs2_data,
+    operand_if.slave op,
 
     // Write-Back Interface (To vector_regfile)
-    output reg wb_valid,
-    output reg [3:0] wb_warp_id,
-    output reg [4:0] wb_rd,
-    output reg [63:0] wb_data,
+    wb_if.master wb,
 
     // To PC module
     output wire alu_updates_nzp,
@@ -53,11 +40,11 @@ module alu #(
     localparam OP_EXIT = 8'hFF;
 
     // ALU Combinational Logic
-    wire [31:0] lane0_rs1 = op_rs1_data[31:0];
-    wire [31:0] lane1_rs1 = op_rs1_data[63:32];
+    wire [31:0] lane0_rs1 = op.rs1_data[31:0];
+    wire [31:0] lane1_rs1 = op.rs1_data[63:32];
     
-    wire [31:0] lane0_rs2 = op_is_imm ? op_imm : op_rs2_data[31:0];
-    wire [31:0] lane1_rs2 = op_is_imm ? op_imm : op_rs2_data[63:32];
+    wire [31:0] lane0_rs2 = op.is_imm ? op.imm : op.rs2_data[31:0];
+    wire [31:0] lane1_rs2 = op.is_imm ? op.imm : op.rs2_data[63:32];
 
     reg [31:0] alu0_out;
     reg [31:0] alu1_out;
@@ -76,7 +63,7 @@ module alu #(
         _is_branch = 1'b0;
         _is_sync = 1'b0;
 
-        case (op_opcode)
+        case (op.opcode)
             OP_ADD, OP_ADDI: begin
                 alu0_out = lane0_rs1 + lane0_rs2;
                 alu1_out = lane1_rs1 + lane1_rs2;
@@ -86,7 +73,7 @@ module alu #(
             OP_SUB, OP_CMP: begin
                 alu0_out = lane0_rs1 - lane0_rs2;
                 alu1_out = lane1_rs1 - lane1_rs2;
-                alu_writes_reg = (op_opcode == OP_SUB);
+                alu_writes_reg = (op.opcode == OP_SUB);
                 _alu_updates_nzp = 1'b1;
             end
             OP_MUL: begin
@@ -98,22 +85,22 @@ module alu #(
             OP_S2R: begin
                 alu_writes_reg = 1'b1;
                 // Imm specifies which system register to read
-                case (op_imm)
+                case (op.imm)
                     32'd0: begin // SR_TID.X
-                        alu0_out = op_thread_id_start;
-                        alu1_out = op_thread_id_start + 32'd1;
+                        alu0_out = op.thread_id_start;
+                        alu1_out = op.thread_id_start + 32'd1;
                     end
                     32'd1: begin // SR_TID.Y (Assume 1D for now, output 0)
                         alu0_out = 32'd0;
                         alu1_out = 32'd0;
                     end
                     32'd2: begin // SR_BID.X
-                        alu0_out = op_block_idx_x;
-                        alu1_out = op_block_idx_x;
+                        alu0_out = op.block_idx_x;
+                        alu1_out = op.block_idx_x;
                     end
                     32'd3: begin // SR_BID.Y
-                        alu0_out = op_block_idx_y;
-                        alu1_out = op_block_idx_y;
+                        alu0_out = op.block_idx_y;
+                        alu1_out = op.block_idx_y;
                     end
                     default: begin
                         alu0_out = 32'd0;
@@ -152,18 +139,20 @@ module alu #(
     // Pipeline Register (Execution -> Write-Back)
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            wb_valid <= 1'b0;
-            wb_warp_id <= 4'd0;
-            wb_rd <= 5'd0;
-            wb_data <= 64'd0;
+            wb.valid <= 1'b0;
+            wb.warp_id <= 4'd0;
+            wb.rd <= 5'd0;
+            wb.data <= 64'd0;
+            wb.mask <= 32'hFFFFFFFF; // Assuming all lanes active for now, or drive properly if added to operand_if
         end else begin
-            wb_valid <= 1'b0;
-            if (op_valid) begin
-                if (alu_writes_reg && (op_rd != 5'd0)) begin
-                    wb_valid <= 1'b1;
-                    wb_warp_id <= op_warp_id;
-                    wb_rd <= op_rd;
-                    wb_data <= {alu1_out, alu0_out};
+            wb.valid <= 1'b0;
+            if (op.valid) begin
+                if (alu_writes_reg && (op.rd != 5'd0)) begin
+                    wb.valid <= 1'b1;
+                    wb.warp_id <= op.warp_id;
+                    wb.rd <= op.rd;
+                    wb.data <= {alu1_out, alu0_out};
+                    wb.mask <= 32'hFFFFFFFF;
                 end
             end
         end

@@ -8,40 +8,20 @@
 // the stack and follows the 'Taken' path. When a 'SYNC' instruction is hit, 
 // it pops the stack to resume the other path. ('if' branch first, 'else' branch second)
 
-module warp_context #(
-    parameter MAX_WARPS = 16
-)(
+import gpu_pkg::*;
+
+module warp_context (
     input wire clk,
     input wire rst_n,
 
     // Allocation Interface (From GPU Top Scheduler)
-    output wire alloc_ready, // High if there is at least one FREE slot
-    output reg [4:0] available_warp_slots, // Number of free slots
-    input wire alloc_valid, // Allocate a new warp
-    input wire [15:0] alloc_block_id, // Which block this warp belongs to
-    input wire [15:0] alloc_block_idx_x,
-    input wire [15:0] alloc_block_idx_y,
-    input wire [15:0] alloc_thread_id_start,
-    input wire [31:0] alloc_active_mask, // Initial active threads
+    warp_alloc_if.slave alloc,
 
     // Issue Interface (To Fetch/Decode Stage)
-    output reg issue_valid,
-    output reg [3:0] issue_warp_id,
-    output reg [11:0] issue_pc, // Program Counter
-    output reg [31:0] issue_active_mask,
-    output reg [15:0] issue_block_idx_x,
-    output reg [15:0] issue_block_idx_y,
-    output reg [15:0] issue_thread_id_start,
+    issue_if.master issue,
     
     // Feedback Interface (From Execution Pipeline)
-    input wire wb_valid, // Write-back valid from pipeline
-    input wire [3:0] wb_warp_id, // Which warp just completed an instruction
-    input wire [11:0] wb_next_pc, // Next PC (could be PC+1 or branch)
-    input wire wb_is_done, // High if warp reached EXIT opcode
-    input wire wb_is_divergent,
-    input wire [31:0] wb_taken_mask,
-    input wire [31:0] wb_not_taken_mask,
-    input wire wb_is_sync
+    ctx_wb_if.slave ctx_wb
 );
 
     // Warp States
@@ -72,17 +52,17 @@ module warp_context #(
     always @(*) begin
         has_free_warp = 1'b0;
         free_warp_idx = 4'd0;
-        available_warp_slots = 5'd0;
+        alloc.available_slots = 5'd0;
         for (i = MAX_WARPS-1; i >= 0; i = i - 1) begin
             if (warp_state[i] == STATE_FREE || warp_state[i] == STATE_DONE) begin
                 has_free_warp = 1'b1;
                 free_warp_idx = i; // Will find the lowest index because loop counts down
-                available_warp_slots = available_warp_slots + 1;
+                alloc.available_slots = alloc.available_slots + 1;
             end
         end
     end
 
-    assign alloc_ready = has_free_warp;
+    assign alloc.ready = has_free_warp;
 
     // Round-Robin Scheduler State
     reg [3:0] rr_idx;
@@ -91,13 +71,13 @@ module warp_context #(
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             rr_idx <= 4'd0;
-            issue_valid <= 1'b0;
-            issue_warp_id <= 4'd0;
-            issue_pc <= 12'd0;
-            issue_active_mask <= 32'd0;
-            issue_block_idx_x <= 16'd0;
-            issue_block_idx_y <= 16'd0;
-            issue_thread_id_start <= 16'd0;
+            issue.valid <= 1'b0;
+            issue.warp_id <= 4'd0;
+            issue.pc <= 12'd0;
+            issue.active_mask <= 32'd0;
+            issue.block_idx_x <= 16'd0;
+            issue.block_idx_y <= 16'd0;
+            issue.thread_id_start <= 16'd0;
             
             for (integer j = 0; j < MAX_WARPS; j = j + 1) begin
                 warp_state[j] <= STATE_FREE;
@@ -105,50 +85,50 @@ module warp_context #(
             end
         end else begin
             // 1. Handle Warp Allocation
-            if (alloc_valid && has_free_warp) begin
+            if (alloc.valid && has_free_warp) begin
                 warp_state[free_warp_idx] <= STATE_READY;
                 warp_pc[free_warp_idx] <= 12'd0; // Reset PC to 0
-                warp_mask[free_warp_idx] <= alloc_active_mask;
-                warp_block_id[free_warp_idx] <= alloc_block_id;
-                warp_block_idx_x[free_warp_idx] <= alloc_block_idx_x;
-                warp_block_idx_y[free_warp_idx] <= alloc_block_idx_y;
-                warp_thread_id_start[free_warp_idx] <= alloc_thread_id_start;
+                warp_mask[free_warp_idx] <= alloc.active_mask;
+                warp_block_id[free_warp_idx] <= alloc.block_id;
+                warp_block_idx_x[free_warp_idx] <= alloc.block_idx_x;
+                warp_block_idx_y[free_warp_idx] <= alloc.block_idx_y;
+                warp_thread_id_start[free_warp_idx] <= alloc.thread_id_start;
             end
 
             // 2. Handle Feedback (Instruction Complete / Exit)
             // Note: If alloc and wb target the same warp, this simple logic favors wb.
             // But a new allocation will target a FREE warp, while wb targets an active warp, 
             // so they won't collide.
-            if (wb_valid) begin
-                if (wb_is_done) begin
-                    warp_state[wb_warp_id] <= STATE_DONE;
-                end else if (wb_is_divergent) begin
+            if (ctx_wb.valid) begin
+                if (ctx_wb.is_done) begin
+                    warp_state[ctx_wb.warp_id] <= STATE_DONE;
+                end else if (ctx_wb.is_divergent) begin
                     // Divergence: Push Not_Taken path to Stack
-                    if (simt_sp[wb_warp_id] < 3'd4) begin
-                        simt_stack[wb_warp_id][simt_sp[wb_warp_id]] <= {warp_pc[wb_warp_id] + 12'd1, wb_not_taken_mask};
-                        simt_sp[wb_warp_id] <= simt_sp[wb_warp_id] + 3'd1;
+                    if (simt_sp[ctx_wb.warp_id] < 3'd4) begin
+                        simt_stack[ctx_wb.warp_id][simt_sp[ctx_wb.warp_id]] <= {warp_pc[ctx_wb.warp_id] + 12'd1, ctx_wb.not_taken_mask};
+                        simt_sp[ctx_wb.warp_id] <= simt_sp[ctx_wb.warp_id] + 3'd1;
                     end
                     // Continue with Taken path
-                    warp_pc[wb_warp_id] <= wb_next_pc;
-                    warp_mask[wb_warp_id] <= wb_taken_mask;
-                    warp_state[wb_warp_id] <= STATE_READY;
-                end else if (wb_is_sync) begin
+                    warp_pc[ctx_wb.warp_id] <= ctx_wb.next_pc;
+                    warp_mask[ctx_wb.warp_id] <= ctx_wb.taken_mask;
+                    warp_state[ctx_wb.warp_id] <= STATE_READY;
+                end else if (ctx_wb.is_sync) begin
                     // Pop from Stack
-                    if (simt_sp[wb_warp_id] > 3'd0) begin
+                    if (simt_sp[ctx_wb.warp_id] > 3'd0) begin
                         // There is a path on the stack, pop it
-                        warp_pc[wb_warp_id] <= simt_stack[wb_warp_id][simt_sp[wb_warp_id] - 1][43:32];
-                        warp_mask[wb_warp_id] <= simt_stack[wb_warp_id][simt_sp[wb_warp_id] - 1][31:0];
-                        simt_sp[wb_warp_id] <= simt_sp[wb_warp_id] - 3'd1;
-                        warp_state[wb_warp_id] <= STATE_READY;
+                        warp_pc[ctx_wb.warp_id] <= simt_stack[ctx_wb.warp_id][simt_sp[ctx_wb.warp_id] - 1][43:32];
+                        warp_mask[ctx_wb.warp_id] <= simt_stack[ctx_wb.warp_id][simt_sp[ctx_wb.warp_id] - 1][31:0];
+                        simt_sp[ctx_wb.warp_id] <= simt_sp[ctx_wb.warp_id] - 3'd1;
+                        warp_state[ctx_wb.warp_id] <= STATE_READY;
                     end else begin
                         // Fully reconverged or empty stack, just advance PC
-                        warp_pc[wb_warp_id] <= wb_next_pc;
-                        warp_state[wb_warp_id] <= STATE_READY;
+                        warp_pc[ctx_wb.warp_id] <= ctx_wb.next_pc;
+                        warp_state[ctx_wb.warp_id] <= STATE_READY;
                     end
                 end else begin
                     // Normal completion
-                    warp_pc[wb_warp_id] <= wb_next_pc;
-                    warp_state[wb_warp_id] <= STATE_READY;
+                    warp_pc[ctx_wb.warp_id] <= ctx_wb.next_pc;
+                    warp_state[ctx_wb.warp_id] <= STATE_READY;
                 end
             end
 
@@ -170,13 +150,13 @@ module warp_context #(
     
                 if (found) begin
                     // A warp is ready to issue!
-                    issue_valid <= 1'b1;
-                    issue_warp_id <= next_idx;
-                    issue_pc <= warp_pc[next_idx];
-                    issue_active_mask <= warp_mask[next_idx];
-                    issue_block_idx_x <= warp_block_idx_x[next_idx];
-                    issue_block_idx_y <= warp_block_idx_y[next_idx];
-                    issue_thread_id_start <= warp_thread_id_start[next_idx];
+                    issue.valid <= 1'b1;
+                    issue.warp_id <= next_idx;
+                    issue.pc <= warp_pc[next_idx];
+                    issue.active_mask <= warp_mask[next_idx];
+                    issue.block_idx_x <= warp_block_idx_x[next_idx];
+                    issue.block_idx_y <= warp_block_idx_y[next_idx];
+                    issue.thread_id_start <= warp_thread_id_start[next_idx];
                     
                     // Set state to STALL so we don't issue it again until it writes back
                     warp_state[next_idx] <= STATE_STALL;
@@ -184,7 +164,7 @@ module warp_context #(
                     // Move Round-Robin index to next warp
                     rr_idx <= (next_idx + 1) % MAX_WARPS;
                 end else begin
-                    issue_valid <= 1'b0;
+                    issue.valid <= 1'b0;
                 end
             end
         end
