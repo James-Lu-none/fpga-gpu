@@ -86,5 +86,16 @@ The entire system uses XDMA's generated clock (axi_aclk: 125MHz) and asynchronou
 
 2. Setup/Hold time violations from XDMA to GPU submodules
   Since in GPU modules, there are thousands of registers connected to the global reset signal (`axi_aresetn`), the massive fanout and long routing distances across the FPGA fabric cause severe recovery/removal time violations. Thus, a Reset Tree (Reset Pipeline) is implemented, so that each reset net is locally bounded, ensuring perfect timing closure regardless of chip size. In this project, the reset signal from XDMA is only distributed to the top-level GPU module. Then, the reset signal is registered at each hierarchical boundary (e.g., Top -> GPC -> SM -> Submodules).
+
 3. reduce fanout for reset signal
   By removing reset logic from all "Datapath" registers (e.g., 256-bit buses, operands) and only resetting "Control" registers (e.g., FSM states, valid signals).
+
+4. time violation from opcode to warp_nzp (long path in ALU)
+  original combinational route/pipeline: opcode -> ALU (including 32x32 DSP multiplier) -> zero comparator -> warp_nzp_reg.
+  This route takes >10ns because 32x32 multiplication on Artix-7 requires cascading multiple DSP slices, causing massive internal propagation delay.
+  **Fix**: We implemented a 2-cycle execution pipeline in `alu.sv` and `pc.sv`. We added an `EX1` stage to explicitly register the outputs of the add/sub/mul operators. This forces Vivado to use the internal pipeline registers of the DSP (`MREG`) and CARRY4 blocks, cutting the combinational logic path in half. The condition code evaluations (NZP) and write-backs are performed in the `EX2` and `EX3` stages. Because the `warp_context` scheduler uses a decoupled handshake (`ctx_wb.valid`), adding latency to the ALU does not cause data hazards.
+
+5. time violation from current_sm to valid_ram and m_axi_araddr in l2_cache
+  original combinational route/pipline: current_sm (Arbiter MUX) -> req_addr (sliced into req_index) -> valid_ram / tag_ram (LUTRAM Asynchronous Read) -> 18-bit Tag Comparator -> FSM Logic -> valid_ram WE / m_axi_awaddr.
+  This 1-cycle cache architecture puts the arbitration MUX, RAM read, Tag compare, and AXI state transition all in a single cycle (`STATE_IDLE`), causing a massive combinational path.
+  **Fix**: We pipelined the L2 cache arbitration by introducing a new FSM state `STATE_COMPARE`. In `STATE_IDLE`, the arbiter only determines the winning SM and latches the request into pipeline registers (`latched_req_*`). In `STATE_COMPARE`, the FSM uses the latched request to index the RAMs, execute the hit/miss logic, and determine the next AXI state. This isolates the arbitration MUX into its own cycle and completely breaks the critical path into the Cache RAM address decoders.

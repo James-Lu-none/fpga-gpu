@@ -91,7 +91,16 @@ module l2_cache (
     reg [255:0] data_ram_dout;
     reg data_ram_we;
     reg [255:0] data_ram_wdata;
-    wire [8:0] data_ram_addr = req_index;
+    
+    // Latched request for pipeline
+    reg [31:0] latched_req_addr;
+    reg [255:0] latched_req_wdata;
+    reg [31:0] latched_req_wstrb;
+    reg latched_req_we;
+    reg [17:0] latched_req_tag;
+    reg [8:0] latched_req_index;
+
+    wire [8:0] data_ram_addr = (state == STATE_IDLE) ? req_index : latched_req_index;
 
     always @(posedge clk) begin
         if (data_ram_we) begin
@@ -109,6 +118,7 @@ module l2_cache (
     localparam STATE_AXI_AW = 3'd4;
     localparam STATE_AXI_W = 3'd5;
     localparam STATE_AXI_B = 3'd6;
+    localparam STATE_COMPARE = 3'd7;
     
     reg [2:0] state;
 
@@ -135,50 +145,62 @@ module l2_cache (
                     if (req_valid && req_ready_internal) begin
                         req_ready_internal <= 1'b0;
                         
-                        // Check Hit
-                        if (valid_ram[req_index] && (tag_ram[req_index] == req_tag)) begin
-                            // L2 HIT
-                            if (req_we) begin
-                                // Write-Through to DDR3
-                                // Also invalidate L2 on write for simplicity
-                                valid_ram[req_index] <= 1'b0;
-                                
-                                m_axi_awvalid <= 1'b1;
-                                m_axi_awaddr <= req_addr; // Address is 32-byte aligned from L1
-                                m_axi_awlen <= 8'd0; // 1 beat of 256-bit
-                                m_axi_awsize <= 3'b101; // 2^5 = 32 bytes
-                                m_axi_awburst <= 2'b01; // INCR
-                                state <= STATE_AXI_AW;
-                            end else begin
-                                // Read Hit
-                                // The BRAM read address (req_index) was presented this cycle.
-                                // In the next cycle, data_ram_dout will be valid.
-                                state <= STATE_HIT_RETURN;
-                            end
-                        end else begin
-                            // L2 MISS
-                            if (req_we) begin
-                                // Write-Miss: Send directly to DDR3
-                                m_axi_awvalid <= 1'b1;
-                                m_axi_awaddr <= req_addr;
-                                m_axi_awlen <= 8'd0;
-                                m_axi_awsize <= 3'b101;
-                                m_axi_awburst <= 2'b01;
-                                state <= STATE_AXI_AW;
-                            end else begin
-                                // Read-Miss: Fetch from DDR3
-                                m_axi_arvalid <= 1'b1;
-                                m_axi_araddr <= req_addr;
-                                m_axi_arlen <= 8'd0; // 1 beat of 256-bit
-                                m_axi_arsize <= 3'b101; // 32 bytes
-                                m_axi_arburst <= 2'b01; // INCR
-                                state <= STATE_AXI_AR;
-                            end
-                        end
+                        // Latch request to break timing path from arbiter (current_sm)
+                        latched_req_addr <= req_addr;
+                        latched_req_wdata <= req_wdata;
+                        latched_req_wstrb <= req_wstrb;
+                        latched_req_we <= req_we;
+                        latched_req_tag <= req_tag;
+                        latched_req_index <= req_index;
+                        
+                        state <= STATE_COMPARE;
                     end else begin
                         // Toggle arbiter if current has no request, but the other might
                         if (!req_valid) begin
                             current_sm <= ~current_sm;
+                        end
+                    end
+                end
+
+                STATE_COMPARE: begin
+                    // Check Hit
+                    if (valid_ram[latched_req_index] && (tag_ram[latched_req_index] == latched_req_tag)) begin
+                        // L2 HIT
+                        if (latched_req_we) begin
+                            // Write-Through to DDR3
+                            // Also invalidate L2 on write for simplicity
+                            valid_ram[latched_req_index] <= 1'b0;
+                            
+                            m_axi_awvalid <= 1'b1;
+                            m_axi_awaddr <= latched_req_addr; // Address is 32-byte aligned from L1
+                            m_axi_awlen <= 8'd0; // 1 beat of 256-bit
+                            m_axi_awsize <= 3'b101; // 2^5 = 32 bytes
+                            m_axi_awburst <= 2'b01; // INCR
+                            state <= STATE_AXI_AW;
+                        end else begin
+                            // Read Hit
+                            // The BRAM read address was presented in STATE_COMPARE.
+                            // In the next cycle (STATE_HIT_RETURN), data_ram_dout will be valid.
+                            state <= STATE_HIT_RETURN;
+                        end
+                    end else begin
+                        // L2 MISS
+                        if (latched_req_we) begin
+                            // Write-Miss: Send directly to DDR3
+                            m_axi_awvalid <= 1'b1;
+                            m_axi_awaddr <= latched_req_addr;
+                            m_axi_awlen <= 8'd0;
+                            m_axi_awsize <= 3'b101;
+                            m_axi_awburst <= 2'b01;
+                            state <= STATE_AXI_AW;
+                        end else begin
+                            // Read-Miss: Fetch from DDR3
+                            m_axi_arvalid <= 1'b1;
+                            m_axi_araddr <= latched_req_addr;
+                            m_axi_arlen <= 8'd0; // 1 beat of 256-bit
+                            m_axi_arsize <= 3'b101; // 32 bytes
+                            m_axi_arburst <= 2'b01; // INCR
+                            state <= STATE_AXI_AR;
                         end
                     end
                 end
@@ -208,8 +230,8 @@ module l2_cache (
                     if (m_axi_rvalid && m_axi_rready) begin
                         m_axi_rready <= 1'b0;
                         // Refill L2 Cache
-                        valid_ram[req_index] <= 1'b1;
-                        tag_ram[req_index] <= req_tag;
+                        valid_ram[latched_req_index] <= 1'b1;
+                        tag_ram[latched_req_index] <= latched_req_tag;
                         
                         data_ram_we <= 1'b1;
                         data_ram_wdata <= m_axi_rdata;
@@ -234,8 +256,8 @@ module l2_cache (
                     if (m_axi_awvalid && m_axi_awready) begin
                         m_axi_awvalid <= 1'b0;
                         m_axi_wvalid <= 1'b1;
-                        m_axi_wdata <= req_wdata;
-                        m_axi_wstrb <= req_wstrb;
+                        m_axi_wdata <= latched_req_wdata;
+                        m_axi_wstrb <= latched_req_wstrb;
                         m_axi_wlast <= 1'b1;
                         state <= STATE_AXI_W;
                     end
