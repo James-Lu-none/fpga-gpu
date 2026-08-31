@@ -1,5 +1,24 @@
 # FPGA-GPU: Xilinx Artix-7 (AX7A200B) PCIe Accelerator
 
+## Tcl commands
+ 
+dump reports:
+```bash
+# use pwd and cd to comfirm path before executing commands
+report_utilization -hierarchical -format xml -file ./utilization.xml
+report_timing -delay_type max -max_paths 50 -sort_by group -nworst 2 -file ./timing.txt
+
+```
+
+if using block design:
+
+```bash
+# .bd to tcl
+write_bd_tcl -force build_bd.tcl
+# project tcl
+write_project_tcl -force recreate_project.tcl
+```
+
 ## design decisions
 
 ### pcie ip
