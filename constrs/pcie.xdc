@@ -11,9 +11,9 @@ set_property PACKAGE_PIN E10 [get_ports sys_clk_clk_n]
 create_clock -period 10.000 -name sys_clk [get_ports sys_clk_clk_p]
 
 # -------------------------------------------------------------------------
-# PCIe System Reset (PCIE_PERST - Temporarily assigned to dummy GPIO M13 to avoid T18 HDMI_HS collision)
+# PCIe System Reset (PCIE_PERST)
 # -------------------------------------------------------------------------
-set_property PACKAGE_PIN M13 [get_ports sys_rst_n]
+set_property PACKAGE_PIN L16 [get_ports sys_rst_n]
 set_property IOSTANDARD LVCMOS33 [get_ports sys_rst_n]
 set_property PULLUP true [get_ports sys_rst_n]
 
