@@ -19,6 +19,26 @@ write_bd_tcl -force build_bd.tcl
 write_project_tcl -force recreate_project.tcl
 ```
 
+## verilog attributes
+
+```verilog
+// Block RAM: use 18kb/36kb on-chip block ram without using LUT, but requires one clock cycle delay to read. cheap in logic resource.
+(* ram_style = "block" *)
+// Distributed RAM: use LUTs to implement RAM, but no clock cycle delay to access. expensive in logic resource.
+(* ram_style = "distributed" *)
+
+// async reg: for asynchronous clock domain crossing or manually delay signal.
+(* async_reg = "true" *)
+// mark debug: adding this attribute will output the signal to waveform, and vivado wont optimize it out.
+(* mark_debug = "true" *)
+
+// dont touch: preventing vivado from optimizing the signal out.
+(* dont_touch = "true" *)
+
+// max fanout: preventing vivado from driving too many logic cells with one signal.
+(* max_fanout = "32" *)
+```
+
 ## design decisions
 
 ### pcie ip
