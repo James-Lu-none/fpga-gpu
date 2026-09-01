@@ -1,0 +1,20 @@
+#RESET F15 
+#KEY1 L19 
+#KEY2 L20 
+#KEY3 K17 
+#KEY4 J17
+
+set_property PACKAGE_PIN F15 [get_ports reset]
+set_property IOSTANDARD LVCMOS33 [get_ports reset]
+
+set_property PACKAGE_PIN L19 [get_ports key1]
+set_property IOSTANDARD LVCMOS33 [get_ports key1]
+
+set_property PACKAGE_PIN L20 [get_ports key2]
+set_property IOSTANDARD LVCMOS33 [get_ports key2]
+
+set_property PACKAGE_PIN K17 [get_ports key3]
+set_property IOSTANDARD LVCMOS33 [get_ports key3]
+
+set_property PACKAGE_PIN J17 [get_ports key4]
+set_property IOSTANDARD LVCMOS33 [get_ports key4]

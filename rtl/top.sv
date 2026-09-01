@@ -21,6 +21,23 @@
 // - SiI9134 HDMI 1080P@60Hz Display Pipeline (hdmi_top)
 
 module top (
+    // key buttons
+    input wire reset,
+    input wire key1,
+    input wire key2,
+    input wire key3,
+    input wire key4,
+
+    // led
+    output wire led1,
+    output wire led2,
+    output wire led3,
+    output wire led4,
+
+    // uart
+    input wire uart_rxd,
+    output wire uart_txd,
+
     // PCIe Differential Reference Clock (Bank 216 MGTREFCLK0: F10/E10)
     input wire sys_clk_clk_p,
     input wire sys_clk_clk_n,
@@ -62,8 +79,7 @@ module top (
     output wire hdmi_de,
     output wire [23:0] hdmi_d,
     inout wire hdmi_scl,
-    inout wire hdmi_sda,
-    output wire hdmi_init_done
+    inout wire hdmi_sda
 );
 
     // 1. PCIe Reference Clock Buffer (IBUFDS_GTE2 Primitive)
@@ -635,6 +651,8 @@ module top (
         .addr_pix (fb_addr),
         .dout_pix ()
     );
+
+    wire hdmi_init_done;
 
     hdmi_top u_hdmi (
         .sys_clk_125m (axi_aclk),

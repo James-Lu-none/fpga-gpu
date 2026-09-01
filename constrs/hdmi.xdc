@@ -103,7 +103,3 @@ set_property IOSTANDARD LVCMOS33 [get_ports hdmi_scl]
 
 set_property PACKAGE_PIN G13 [get_ports hdmi_sda]
 set_property IOSTANDARD LVCMOS33 [get_ports hdmi_sda]
-
-# init done led indicator
-set_property  PACKAGE_PIN L13 [get_ports hdmi_init_done]
-set_property IOSTANDARD LVCMOS33 [get_ports hdmi_init_done]
