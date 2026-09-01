@@ -23,3 +23,15 @@ create_clock -period 5.000 -name ddr3_sys_clk [get_ports sys_clk_p]
 
 # Ignore recovery/removal timing on the HDMI asynchronous reset synchronizer
 set_false_path -to [get_pins -quiet u_hdmi/clk_pix_rst_sync_reg[*]/CLR]
+
+ 
+# [Labtools 27-3347] Flash Programming Unsuccessful: Byte 8805306 does not match (56 != 00) Verify that the selected flash part matches the actual flash device connected to the board. Resolution: Verify the correct flash type is selected in the hardware manager. A mismatch between the selected flash part and the detected flash device will cause initialization to fail.
+# resolved with following configuration
+# set flash bus width to 4 bits
+set_property BITSTREAM.CONFIG.SPI_BUSWIDTH 4 [current_design]
+# set flash to use 4 data pins
+set_property CONFIG_MODE SPIx4 [current_design]
+# set flash read clock frequency to 33 MHz
+set_property BITSTREAM.CONFIG.CONFIGRATE 33 [current_design]
+# since flash fails at about 8MB everytime, so we enable compression to make bitstream smaller
+set_property BITSTREAM.GENERAL.COMPRESS TRUE [current_design]
