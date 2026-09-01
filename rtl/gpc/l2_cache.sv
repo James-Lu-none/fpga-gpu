@@ -76,13 +76,23 @@ module l2_cache (
     wire [17:0] req_tag = req_addr[31:14];
     wire [8:0] req_index = req_addr[13:5];
     
-    (* ram_style = "distributed" *) reg [17:0] tag_ram [0:NUM_LINES-1];
-    (* ram_style = "distributed" *) reg valid_ram [0:NUM_LINES-1];
+    (* ram_style = "block" *) reg [17:0] tag_ram [0:NUM_LINES-1];
+    (* ram_style = "block" *) reg valid_ram [0:NUM_LINES-1];
+
+    reg [17:0] tag_ram_dout;
+    reg valid_ram_dout;
+    
+    reg tag_ram_we;
+    reg [17:0] tag_ram_wdata;
+    
+    reg valid_ram_we;
+    reg valid_ram_wdata;
 
     integer i;
     initial begin
         for (i=0; i<NUM_LINES; i=i+1) begin
             valid_ram[i] = 1'b0;
+            tag_ram[i] = 18'd0;
         end
     end
 
@@ -100,14 +110,23 @@ module l2_cache (
     reg [17:0] latched_req_tag;
     reg [8:0] latched_req_index;
 
-    wire [8:0] data_ram_addr = (state == STATE_IDLE) ? req_index : latched_req_index;
+    wire [8:0] ram_addr = (state == STATE_IDLE) ? req_index : latched_req_index;
 
     always @(posedge clk) begin
         if (data_ram_we) begin
-            data_ram[data_ram_addr] <= data_ram_wdata;
+            data_ram[ram_addr] <= data_ram_wdata;
         end
-        // Synchronous Read
-        data_ram_dout <= data_ram[data_ram_addr];
+        data_ram_dout <= data_ram[ram_addr];
+        
+        if (tag_ram_we) begin
+            tag_ram[ram_addr] <= tag_ram_wdata;
+        end
+        tag_ram_dout <= tag_ram[ram_addr];
+        
+        if (valid_ram_we) begin
+            valid_ram[ram_addr] <= valid_ram_wdata;
+        end
+        valid_ram_dout <= valid_ram[ram_addr];
     end
 
     // FSM
@@ -135,8 +154,13 @@ module l2_cache (
             m_axi_bready <= 1'b1; // Always ready for B
             m_axi_arvalid <= 1'b0;
             m_axi_rready <= 1'b0;
+            
+            valid_ram_we <= 1'b0;
+            tag_ram_we <= 1'b0;
         end else begin
             data_ram_we <= 1'b0;
+            valid_ram_we <= 1'b0;
+            tag_ram_we <= 1'b0;
             sm0_rsp_valid <= 1'b0;
             sm1_rsp_valid <= 1'b0;
 
@@ -164,12 +188,13 @@ module l2_cache (
 
                 STATE_COMPARE: begin
                     // Check Hit
-                    if (valid_ram[latched_req_index] && (tag_ram[latched_req_index] == latched_req_tag)) begin
+                    if (valid_ram_dout && (tag_ram_dout == latched_req_tag)) begin
                         // L2 HIT
                         if (latched_req_we) begin
                             // Write-Through to DDR3
                             // Also invalidate L2 on write for simplicity
-                            valid_ram[latched_req_index] <= 1'b0;
+                            valid_ram_we <= 1'b1;
+                            valid_ram_wdata <= 1'b0;
                             
                             m_axi_awvalid <= 1'b1;
                             m_axi_awaddr <= latched_req_addr; // Address is 32-byte aligned from L1
@@ -179,7 +204,7 @@ module l2_cache (
                             state <= STATE_AXI_AW;
                         end else begin
                             // Read Hit
-                            // The BRAM read address was presented in STATE_COMPARE.
+                            // The BRAM read address was presented in STATE_IDLE/STATE_COMPARE.
                             // In the next cycle (STATE_HIT_RETURN), data_ram_dout will be valid.
                             state <= STATE_HIT_RETURN;
                         end
@@ -230,8 +255,10 @@ module l2_cache (
                     if (m_axi_rvalid && m_axi_rready) begin
                         m_axi_rready <= 1'b0;
                         // Refill L2 Cache
-                        valid_ram[latched_req_index] <= 1'b1;
-                        tag_ram[latched_req_index] <= latched_req_tag;
+                        valid_ram_we <= 1'b1;
+                        valid_ram_wdata <= 1'b1;
+                        tag_ram_we <= 1'b1;
+                        tag_ram_wdata <= latched_req_tag;
                         
                         data_ram_we <= 1'b1;
                         data_ram_wdata <= m_axi_rdata;
