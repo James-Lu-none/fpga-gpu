@@ -47,11 +47,11 @@ module top (
     input wire sys_clk_p,
     input wire sys_clk_n,
 
-    // PCIe Transceiver Lanes (PCIe Gen2 x2)
-    input wire [1:0] pci_exp_rxp,
-    input wire [1:0] pci_exp_rxn,
-    output wire [1:0] pci_exp_txp,
-    output wire [1:0] pci_exp_txn,
+    // PCIe Transceiver Lanes (PCIe Gen2 x1)
+    input wire [0:0] pci_exp_rxp,
+    input wire [0:0] pci_exp_rxn,
+    output wire [0:0] pci_exp_txp,
+    output wire [0:0] pci_exp_txn,
 
     // DDR3 SDRAM Physical Pins (Bank 34/35 1GB 32-bit MT41J256M16HA x2)
     inout wire [31:0] ddr3_dq,
