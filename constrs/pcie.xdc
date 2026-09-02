@@ -22,11 +22,3 @@ set_property PULLUP true [get_ports sys_rst_n]
 # -------------------------------------------------------------------------
 set_property DONT_TOUCH true [get_cells -hierarchical -filter {NAME =~ *pcie*}]
 set_property DONT_TOUCH true [get_cells -hierarchical -filter {NAME =~ *xdma*}]
-
-# -------------------------------------------------------------------------
-# Configuration Voltage & SPI Flash Bitstream Options
-# -------------------------------------------------------------------------
-set_property BITSTREAM.CONFIG.CONFIGRATE 50 [current_design]
-set_property BITSTREAM.CONFIG.SPI_BUSWIDTH 4 [current_design]
-set_property CONFIG_VOLTAGE 3.3 [current_design]
-set_property CFGBVS VCCO [current_design]

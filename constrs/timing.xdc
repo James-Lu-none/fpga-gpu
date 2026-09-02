@@ -24,7 +24,10 @@ create_clock -period 5.000 -name ddr3_sys_clk [get_ports sys_clk_p]
 # Ignore recovery/removal timing on the HDMI asynchronous reset synchronizer
 set_false_path -to [get_pins -quiet u_hdmi/clk_pix_rst_sync_reg[*]/CLR]
 
- 
+# Configuration Voltage
+set_property CONFIG_VOLTAGE 3.3 [current_design]
+set_property CFGBVS VCCO [current_design]
+
 # [Labtools 27-3347] Flash Programming Unsuccessful: Byte 8805306 does not match (56 != 00) Verify that the selected flash part matches the actual flash device connected to the board. Resolution: Verify the correct flash type is selected in the hardware manager. A mismatch between the selected flash part and the detected flash device will cause initialization to fail.
 # resolved with following configuration
 # set flash bus width to 4 bits
@@ -35,3 +38,31 @@ set_property CONFIG_MODE SPIx4 [current_design]
 set_property BITSTREAM.CONFIG.CONFIGRATE 33 [current_design]
 # since flash fails at about 8MB everytime, so we enable compression to make bitstream smaller
 set_property BITSTREAM.GENERAL.COMPRESS TRUE [current_design]
+
+# UART
+set_property PACKAGE_PIN L14 [get_ports uart_rxd]
+set_property IOSTANDARD LVCMOS33 [get_ports uart_rxd]
+set_property PACKAGE_PIN L15 [get_ports uart_txd]
+set_property IOSTANDARD LVCMOS33 [get_ports uart_txd]
+
+# KEYs
+set_property PACKAGE_PIN F15 [get_ports reset]
+set_property IOSTANDARD LVCMOS33 [get_ports reset]
+set_property PACKAGE_PIN L19 [get_ports key1]
+set_property IOSTANDARD LVCMOS33 [get_ports key1]
+set_property PACKAGE_PIN L20 [get_ports key2]
+set_property IOSTANDARD LVCMOS33 [get_ports key2]
+set_property PACKAGE_PIN K17 [get_ports key3]
+set_property IOSTANDARD LVCMOS33 [get_ports key3]
+set_property PACKAGE_PIN J17 [get_ports key4]
+set_property IOSTANDARD LVCMOS33 [get_ports key4]
+
+# LEDs
+set_property PACKAGE_PIN L13 [get_ports led1]
+set_property IOSTANDARD LVCMOS33 [get_ports led1]
+set_property PACKAGE_PIN M13 [get_ports led2]
+set_property IOSTANDARD LVCMOS33 [get_ports led2]
+set_property PACKAGE_PIN K14 [get_ports led3]
+set_property IOSTANDARD LVCMOS33 [get_ports led3]
+set_property PACKAGE_PIN K13 [get_ports led4]
+set_property IOSTANDARD LVCMOS33 [get_ports led4]
