@@ -28,6 +28,8 @@ module streaming_multiprocessor (
     output wire [31:0] l1_req_addr,
     output wire [255:0]l1_req_wdata,
     output wire [31:0] l1_req_wstrb,
+    output wire l1_req_we,
+    input wire l1_req_ready,
     input wire l1_rsp_valid,
     input wire [255:0]l1_rsp_rdata
 );
