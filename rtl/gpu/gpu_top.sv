@@ -16,11 +16,6 @@ module gpu_top (
     // 256-bit AXI4-Full Master Interface (To Global Memory Crossbar)
     axi4_if.master m_axi_gmem,
 
-    // Framebuffer Parallel Render Output Interface
-    output wire fb_we,
-    output wire [18:0] fb_addr,
-    output wire [23:0] fb_rgb,
-
     // PCIe Host Interrupts
     output wire usr_irq_req,
     input wire usr_irq_ack
@@ -217,10 +212,7 @@ module gpu_top (
         .clk (clk),
         .rst_n (sys_rst_n),
         .s_axi_lite (rv_gpu_axil),
-        .m_axi_gmem (m_axi_gmem),
-        .fb_we (fb_we),
-        .fb_addr (fb_addr),
-        .fb_rgb (fb_rgb)
+        .m_axi_gmem (m_axi_gmem)
     );
 
 endmodule

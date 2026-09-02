@@ -12,12 +12,7 @@ module processing_cluster (
     axi_lite_if.slave s_axi_lite,
 
     // 256-bit AXI4-Full Master Interface (To Global Memory Crossbar)
-    axi4_if.master m_axi_gmem,
-
-    // Framebuffer Parallel Render Output Interface (from SM Core)
-    output wire fb_we,
-    output wire [18:0] fb_addr,
-    output wire [23:0] fb_rgb
+    axi4_if.master m_axi_gmem
 );
 
     // Reset Pipeline (Level 1)
@@ -161,14 +156,8 @@ module processing_cluster (
     wire sm1_l1_rsp_valid;
     wire [255:0]sm1_rsp_rdata;
 
-    wire sm0_fb_we;
-    wire [18:0] sm0_fb_addr;
-    wire [23:0] sm0_fb_rgb;
     wire [4:0] sm0_slots;
 
-    wire sm1_fb_we = 1'b0;
-    wire [18:0] sm1_fb_addr = 19'd0;
-    wire [23:0] sm1_fb_rgb = 24'd0;
     wire [4:0] sm1_slots = 5'd0;
 
     // assign sm_available_warp_slots = {sm1_slots, sm0_slots};
@@ -196,10 +185,7 @@ module processing_cluster (
         .l1_req_we (sm0_l1_req_we),
         .l1_req_ready (sm0_l1_req_ready),
         .l1_rsp_valid (sm0_l1_rsp_valid),
-        .l1_rsp_rdata (sm0_l1_rsp_rdata),
-        .fb_we (sm0_fb_we),
-        .fb_addr (sm0_fb_addr),
-        .fb_rgb (sm0_fb_rgb)
+        .l1_rsp_rdata (sm0_l1_rsp_rdata)
     );
 
     // // SM 1
@@ -224,10 +210,7 @@ module processing_cluster (
     //     .l1_req_we (sm1_l1_req_we),
     //     .l1_req_ready (sm1_l1_req_ready),
     //     .l1_rsp_valid (sm1_l1_rsp_valid),
-    //     .l1_rsp_rdata (sm1_rsp_rdata),
-    //     .fb_we (sm1_fb_we),
-    //     .fb_addr (sm1_fb_addr),
-    //     .fb_rgb (sm1_fb_rgb)
+    //     .l1_rsp_rdata (sm1_rsp_rdata)
     // );
 
     // Shared L2 Cache & AXI4 Master
@@ -281,10 +264,5 @@ module processing_cluster (
         .m_axi_rlast (m_axi_gmem.rlast),
         .m_axi_rready (m_axi_gmem.rready)
     );
-
-    // Framebuffer Arbiter (Priority Mux)
-    assign fb_we = sm0_fb_we | sm1_fb_we;
-    assign fb_addr = sm0_fb_we ? sm0_fb_addr : sm1_fb_addr;
-    assign fb_rgb = sm0_fb_we ? sm0_fb_rgb : sm1_fb_rgb;
 
 endmodule

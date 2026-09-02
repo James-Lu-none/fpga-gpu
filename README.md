@@ -110,11 +110,15 @@ The register space is built using Vivado IP Wizard generated AXI4-Lite Slave per
     - **`Opcode 4` (SMEM Write)**: Stores incoming stream payload into SMEM Scratchpad SRAM.
     - **`Opcode 5` (SMEM Multi-Pass Accumulate)**: Multi-pass execution ($Output[i] = Input[i] + \text{SMEM}[i]$).
 
-### framebuffer & hdmi parallel rendering pipeline
+### GPC to framebuffer
 
-- **Dual-Port Framebuffer VRAM ([`rtl/framebuffer_ram.v`](file:///c:/Users/user/workspace/fpga-gpu/rtl/framebuffer_ram.v))**:
-  - Bridges GPU SIMD Compute Core parallel rendering output (`gpu_compute_core.v` Opcode 3) to SiI9134 HDMI Transmitter display pipeline.
-  - Allows Host CUDA Kernels to submit parallel render jobs, compute 24-bit RGB pixel data on FPGA SIMD cores, write directly to Framebuffer VRAM, and output real-time 1080P/720P video over HDMI!
+lsu module in sm_processing_block will only write to L2 cache instead of writing directly to Framebuffer bram to simplify implementation.
+
+### Memory Hierarchy
+
+- Vector Register File (VRF): instantiat at processing_block level, serve for all threads (alus) in a processing_block
+- L1 cache: instatiat at SM level, serve for all processing_block in a SM
+- L2 cache: instatiat at GPC level, serve for all SMs in a GPC
 
 ### issues during implementation
 

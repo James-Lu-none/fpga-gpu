@@ -17,25 +17,14 @@ module processing_block (
     // Warp Launch Interface (From Warp Scheduler)
     warp_alloc_if.slave alloc,
 
-    // L1 to L2 Cache Interface
+    // L1 Cache Interface (To SM Global L1 Cache)
     output wire l1_req_valid,
     output wire [31:0] l1_req_addr,
-    output wire [255:0]l1_req_wdata,
-    output wire [31:0] l1_req_wstrb,
+    output wire [63:0] l1_req_wdata,
     output wire l1_req_we,
     input wire l1_req_ready,
     input wire l1_rsp_valid,
-    input wire [255:0]l1_rsp_rdata,
-
-    // Legacy Memory & Render Interfaces (Tied off for now during refactor)
-    output wire [7:0] smem_raddr,
-    input wire [63:0] smem_rdata,
-    output wire smem_we,
-    output wire [7:0] smem_waddr,
-    output wire [63:0] smem_wdata,
-    output wire fb_we,
-    output wire [18:0] fb_addr,
-    output wire [23:0] fb_rgb
+    input wire [63:0] l1_rsp_rdata
 );
 
     // Reset Pipeline (Level 3)
@@ -45,15 +34,6 @@ module processing_block (
         else        core_rst_n_reg <= 1'b1;
     end
     wire core_rst_n = core_rst_n_reg;
-
-    // Tie-off Legacy Interfaces
-    assign smem_raddr = 8'd0;
-    assign smem_we = 1'b0;
-    assign smem_waddr = 8'd0;
-    assign smem_wdata = 64'd0;
-    assign fb_we = 1'b0;
-    assign fb_addr = 19'd0;
-    assign fb_rgb = 24'd0;
 
     // Inter-module Interconnect Interfaces
     issue_if issue();
@@ -148,15 +128,7 @@ module processing_block (
         .ctx_wb (ctx_alu_wb)
     );
 
-    // 5. Load/Store Unit (LSU) & L1 Cache
-    wire l1_req_valid_int;
-    wire [31:0] l1_req_addr_int;
-    wire [63:0] l1_req_wdata_int;
-    wire l1_req_we_int;
-    wire l1_req_ready_int;
-    
-    wire l1_rsp_valid_int;
-    wire [63:0] l1_rsp_rdata_int;
+    // 5. Load/Store Unit (LSU)
     wire lsu_ready;
 
     lsu u_lsu (
@@ -165,38 +137,16 @@ module processing_block (
         .op (op),
         .lsu_ready (lsu_ready),
         
-        .l1_req_valid (l1_req_valid_int),
-        .l1_req_addr (l1_req_addr_int),
-        .l1_req_wdata (l1_req_wdata_int),
-        .l1_req_we (l1_req_we_int),
-        .l1_req_ready (l1_req_ready_int),
-        .l1_rsp_valid (l1_rsp_valid_int),
-        .l1_rsp_rdata (l1_rsp_rdata_int),
+        .l1_req_valid (l1_req_valid),
+        .l1_req_addr (l1_req_addr),
+        .l1_req_wdata (l1_req_wdata),
+        .l1_req_we (l1_req_we),
+        .l1_req_ready (l1_req_ready),
+        .l1_rsp_valid (l1_rsp_valid),
+        .l1_rsp_rdata (l1_rsp_rdata),
         
         .wb (lsu_wb),
         .ctx_wb (ctx_lsu_wb)
-    );
-
-    l1_cache u_l1_cache (
-        .clk (clk),
-        .rst_n (core_rst_n),
-        
-        .req_valid (l1_req_valid_int),
-        .req_addr (l1_req_addr_int),
-        .req_wdata (l1_req_wdata_int),
-        .req_we (l1_req_we_int),
-        .req_ready (l1_req_ready_int),
-        .rsp_valid (l1_rsp_valid_int),
-        .rsp_rdata (l1_rsp_rdata_int),
-        
-        .l2_req_valid (l1_req_valid),
-        .l2_req_addr (l1_req_addr),
-        .l2_req_wdata (l1_req_wdata),
-        .l2_req_wstrb (l1_req_wstrb),
-        .l2_req_we (l1_req_we),
-        .l2_req_ready (l1_req_ready),
-        .l2_rsp_valid (l1_rsp_valid),
-        .l2_rsp_rdata (l1_rsp_rdata)
     );
 
 endmodule

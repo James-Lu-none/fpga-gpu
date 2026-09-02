@@ -627,14 +627,16 @@ module top (
     wire [18:0] fb_addr;
     wire [23:0] fb_rgb;
 
+    // implement with l2 to frame buffer later
+    assign fb_we = 1'b0;
+    assign fb_addr = 19'd0;
+    assign fb_rgb = 24'd0;
+
     gpu_top u_gpu_top (
         .clk (axi_aclk),
         .rst_n (axi_aresetn),
         .s_axi_lite (xdma_rv_axil),
         .m_axi_gmem (gpu_xbar_axi),
-        .fb_we (fb_we),
-        .fb_addr (fb_addr),
-        .fb_rgb (fb_rgb),
         .usr_irq_req (usr_irq_req),
         .usr_irq_ack (usr_irq_ack)
     );

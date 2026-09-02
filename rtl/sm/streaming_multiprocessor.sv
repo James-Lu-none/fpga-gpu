@@ -28,14 +28,8 @@ module streaming_multiprocessor (
     output wire [31:0] l1_req_addr,
     output wire [255:0]l1_req_wdata,
     output wire [31:0] l1_req_wstrb,
-    output wire l1_req_we,
-    input wire l1_req_ready,
     input wire l1_rsp_valid,
-    input wire [255:0]l1_rsp_rdata,
-
-    output wire fb_we,
-    output wire [18:0] fb_addr,
-    output wire [23:0] fb_rgb
+    input wire [255:0]l1_rsp_rdata
 );
 
     // Reset Pipeline (Level 2)
@@ -64,11 +58,14 @@ module streaming_multiprocessor (
     assign available_warp_slots = alloc.available_slots;
 
     // 2. Sub-Core (Processing Block)
-    wire sm_smem_we;
-    wire [7:0] sm_smem_waddr;
-    wire [63:0] sm_smem_wdata;
-    wire [7:0] sm_smem_raddr;
-    wire [63:0] smem_rdata = 64'd0; // Dummy for now since we removed local SMEM RAM dump
+    // Internal wires for LSU to L1 Cache communication
+    wire l1_req_valid_int;
+    wire [31:0] l1_req_addr_int;
+    wire [63:0] l1_req_wdata_int;
+    wire l1_req_we_int;
+    wire l1_req_ready_int;
+    wire l1_rsp_valid_int;
+    wire [63:0] l1_rsp_rdata_int;
 
     processing_block u_sub_core (
         .clk (clk),
@@ -82,26 +79,36 @@ module streaming_multiprocessor (
         // Warp Allocation
         .alloc (alloc),
         
-        .l1_req_valid (l1_req_valid),
-        .l1_req_addr (l1_req_addr),
-        .l1_req_wdata (l1_req_wdata),
-        .l1_req_wstrb (l1_req_wstrb),
-        .l1_req_we (l1_req_we),
-        .l1_req_ready (l1_req_ready),
-        .l1_rsp_valid (l1_rsp_valid),
-        .l1_rsp_rdata (l1_rsp_rdata),
+        .l1_req_valid (l1_req_valid_int),
+        .l1_req_addr (l1_req_addr_int),
+        .l1_req_wdata (l1_req_wdata_int),
+        .l1_req_we (l1_req_we_int),
+        .l1_req_ready (l1_req_ready_int),
+        .l1_rsp_valid (l1_rsp_valid_int),
+        .l1_rsp_rdata (l1_rsp_rdata_int)
+    );
 
-        // SMEM Interface
-        .smem_we (sm_smem_we),
-        .smem_waddr (sm_smem_waddr),
-        .smem_wdata (sm_smem_wdata),
-        .smem_raddr (sm_smem_raddr),
-        .smem_rdata (smem_rdata),
+    // 3. L1 Data Cache (Shared at SM Level)
+    l1_cache u_l1_cache (
+        .clk (clk),
+        .rst_n (sm_rst_n),
         
-        // Display
-        .fb_we (fb_we),
-        .fb_addr (fb_addr),
-        .fb_rgb (fb_rgb)
+        .req_valid (l1_req_valid_int),
+        .req_addr (l1_req_addr_int),
+        .req_wdata (l1_req_wdata_int),
+        .req_we (l1_req_we_int),
+        .req_ready (l1_req_ready_int),
+        .rsp_valid (l1_rsp_valid_int),
+        .rsp_rdata (l1_rsp_rdata_int),
+        
+        .l2_req_valid (l1_req_valid),
+        .l2_req_addr (l1_req_addr),
+        .l2_req_wdata (l1_req_wdata),
+        .l2_req_wstrb (l1_req_wstrb),
+        .l2_req_we (l1_req_we),
+        .l2_req_ready (l1_req_ready),
+        .l2_rsp_valid (l1_rsp_valid),
+        .l2_rsp_rdata (l1_rsp_rdata)
     );
 
 endmodule
