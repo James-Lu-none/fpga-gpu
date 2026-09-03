@@ -7,6 +7,7 @@
 module axi_lite_decoder #(
     parameter [15:0] ADDR_BASE_0 = 16'h0000,
     parameter [15:0] ADDR_BASE_1 = 16'h1000,
+    parameter [15:0] ADDR_BASE_2 = 16'h2000,
     parameter integer REGISTER_RESPONSES = 1
 ) (
     input wire clk,
@@ -19,11 +20,15 @@ module axi_lite_decoder #(
     axi_lite_if.master m0_axi,
 
     // Slave 1 Interface (e.g. GPU Engine)
-    axi_lite_if.master m1_axi
+    axi_lite_if.master m1_axi,
+
+    // Slave 2 Interface (e.g. UART)
+    axi_lite_if.master m2_axi
 );
 
     wire sel_0 = (s_axi.araddr[31:16] == ADDR_BASE_0) || (s_axi.awaddr[31:16] == ADDR_BASE_0);
     wire sel_1 = (s_axi.araddr[31:16] == ADDR_BASE_1) || (s_axi.awaddr[31:16] == ADDR_BASE_1);
+    wire sel_2 = (s_axi.araddr[31:16] == ADDR_BASE_2) || (s_axi.awaddr[31:16] == ADDR_BASE_2);
 
     // Address & Write Data Routing (Master -> Slaves)
     assign m0_axi.awvalid = s_axi.awvalid && sel_0;
@@ -46,22 +51,34 @@ module axi_lite_decoder #(
     assign m1_axi.araddr = {16'd0, s_axi.araddr[15:0]}; // Map to zero-based for Slave 1
     assign m1_axi.arprot = s_axi.arprot;
 
+    assign m2_axi.awvalid = s_axi.awvalid && sel_2;
+    assign m2_axi.awaddr = {16'd0, s_axi.awaddr[15:0]}; // Map to zero-based for Slave 2
+    assign m2_axi.awprot = s_axi.awprot;
+    assign m2_axi.wvalid = s_axi.wvalid && sel_2;
+    assign m2_axi.wdata = s_axi.wdata;
+    assign m2_axi.wstrb = s_axi.wstrb;
+    assign m2_axi.arvalid = s_axi.arvalid && sel_2;
+    assign m2_axi.araddr = {16'd0, s_axi.araddr[15:0]}; // Map to zero-based for Slave 2
+    assign m2_axi.arprot = s_axi.arprot;
+
     // Ready Signals Routing (Slaves -> Master)
-    assign s_axi.awready = sel_0 ? m0_axi.awready : (sel_1 ? m1_axi.awready : 1'b1);
-    assign s_axi.wready = sel_0 ? m0_axi.wready : (sel_1 ? m1_axi.wready : 1'b1);
-    assign s_axi.arready = sel_0 ? m0_axi.arready : (sel_1 ? m1_axi.arready : 1'b1);
+    assign s_axi.awready = sel_0 ? m0_axi.awready : (sel_1 ? m1_axi.awready : (sel_2 ? m2_axi.awready : 1'b1));
+    assign s_axi.wready = sel_0 ? m0_axi.wready : (sel_1 ? m1_axi.wready : (sel_2 ? m2_axi.wready : 1'b1));
+    assign s_axi.arready = sel_0 ? m0_axi.arready : (sel_1 ? m1_axi.arready : (sel_2 ? m2_axi.arready : 1'b1));
 
     // Response Routing (Slaves -> Master)
     assign m0_axi.bready = s_axi.bready;
     assign m0_axi.rready = s_axi.rready;
     assign m1_axi.bready = s_axi.bready;
     assign m1_axi.rready = s_axi.rready;
+    assign m2_axi.bready = s_axi.bready;
+    assign m2_axi.rready = s_axi.rready;
 
-    wire comb_bvalid = m0_axi.bvalid | m1_axi.bvalid;
-    wire comb_rvalid = m0_axi.rvalid | m1_axi.rvalid;
-    wire [31:0] comb_rdata = m0_axi.rvalid ? m0_axi.rdata : m1_axi.rdata;
-    wire [1:0] comb_bresp = m0_axi.bvalid ? m0_axi.bresp : m1_axi.bresp;
-    wire [1:0] comb_rresp = m0_axi.rvalid ? m0_axi.rresp : m1_axi.rresp;
+    wire comb_bvalid = m0_axi.bvalid | m1_axi.bvalid | m2_axi.bvalid;
+    wire comb_rvalid = m0_axi.rvalid | m1_axi.rvalid | m2_axi.rvalid;
+    wire [31:0] comb_rdata = m0_axi.rvalid ? m0_axi.rdata : (m1_axi.rvalid ? m1_axi.rdata : m2_axi.rdata);
+    wire [1:0] comb_bresp = m0_axi.bvalid ? m0_axi.bresp : (m1_axi.bvalid ? m1_axi.bresp : m2_axi.bresp);
+    wire [1:0] comb_rresp = m0_axi.rvalid ? m0_axi.rresp : (m1_axi.rvalid ? m1_axi.rresp : m2_axi.rresp);
 
     generate
         if (REGISTER_RESPONSES) begin : gen_reg_resp
@@ -78,11 +95,11 @@ module axi_lite_decoder #(
                     r_rresp <= 2'b00;
                 end else begin
                     // Simplified 1-cycle delay for zero-wait-state slaves
-                    r_bvalid <= (s_axi.awvalid && s_axi.wvalid) && (sel_0 || sel_1);
-                    r_rvalid <= s_axi.arvalid && (sel_0 || sel_1);
+                    r_bvalid <= (s_axi.awvalid && s_axi.wvalid) && (sel_0 || sel_1 || sel_2);
+                    r_rvalid <= s_axi.arvalid && (sel_0 || sel_1 || sel_2);
                     
                     // Capture data combinatorially from slaves
-                    r_rdata <= m0_axi.arvalid ? m0_axi.rdata : (m1_axi.arvalid ? m1_axi.rdata : 32'd0);
+                    r_rdata <= m0_axi.arvalid ? m0_axi.rdata : (m1_axi.arvalid ? m1_axi.rdata : (m2_axi.arvalid ? m2_axi.rdata : 32'd0));
                     r_bresp <= 2'b00; // Assume OKAY for simplicity
                     r_rresp <= 2'b00; // Assume OKAY for simplicity
                 end

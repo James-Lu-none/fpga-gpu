@@ -720,7 +720,7 @@
         "pf3_sriov_bar5_prefetchable": [ { "value": "false", "resolve_type": "user", "usage": "all" } ],
         "pf3_sriov_bar5_size": [ { "value": "2", "resolve_type": "user", "format": "long", "enabled": false, "usage": "all" } ],
         "pf3_sriov_bar5_scale": [ { "value": "Kilobytes", "resolve_type": "user", "enabled": false, "usage": "all" } ],
-        "pcie_id_if": [ { "value": "FALSE", "resolve_type": "user", "format": "bool", "usage": "all" } ],
+        "pcie_id_if": [ { "value": "false", "value_src": "user", "resolve_type": "user", "format": "bool", "usage": "all" } ],
         "pf0_vendor_id_mqdma": [ { "value": "10EE", "resolve_type": "user", "usage": "all" } ],
         "pf1_vendor_id_mqdma": [ { "value": "10EE", "resolve_type": "user", "enabled": false, "usage": "all" } ],
         "pf2_vendor_id_mqdma": [ { "value": "10EE", "resolve_type": "user", "enabled": false, "usage": "all" } ],
@@ -1686,5 +1686,5 @@
       }
     }
   },
-  "checksum": "cd4a61c1"
+  "checksum": "4ab53448"
 }

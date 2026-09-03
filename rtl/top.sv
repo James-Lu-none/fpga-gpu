@@ -638,7 +638,9 @@ module top (
         .s_axi_lite (xdma_rv_axil),
         .m_axi_gmem (gpu_xbar_axi),
         .usr_irq_req (usr_irq_req),
-        .usr_irq_ack (usr_irq_ack)
+        .usr_irq_ack (usr_irq_ack),
+        .uart_rxd (uart_rxd),
+        .uart_txd (uart_txd)
     );
 
     // 8. Framebuffer & HDMI Display Pipeline Instances
@@ -678,7 +680,5 @@ module top (
     assign led2 = hdmi_init_done;      // HDMI I2C Init Status
     assign led3 = combined_rst_n;      // System Reset Status
     assign led4 = usr_irq_req;         // Interrupt Status
-
-    assign uart_txd = 1'b1;
 
 endmodule

@@ -18,7 +18,11 @@ module gpu_top (
 
     // PCIe Host Interrupts
     output wire usr_irq_req,
-    input wire usr_irq_ack
+    input wire usr_irq_ack,
+    
+    // UART Physical Interface
+    input wire uart_rxd,
+    output wire uart_txd
 );
 
     // Reset Synchronizer to resolve high fanout / recovery time violations
@@ -39,6 +43,7 @@ module gpu_top (
     // RISC-V Memory interfaces
     axi_lite_if rv_axi(); // From RISC-V mem master
     axi_lite_if bram_axi(); // To block ram that store RV firmware and mailbox messages
+    axi_lite_if rv_uart_axil(); // To UART
 
     // 1. RISC-V Command Processor SoC (Control Plane)
     
@@ -106,13 +111,27 @@ module gpu_top (
     axi_lite_decoder #(
         .ADDR_BASE_0(`ADDR_BASE_BRAM),
         .ADDR_BASE_1(`ADDR_BASE_GPC),
+        .ADDR_BASE_2(16'h2000),
         .REGISTER_RESPONSES(1)
     ) u_decoder (
         .clk(clk),
         .rst_n(sys_rst_n),
         .s_axi(rv_axi), // From RISC-V mem master
         .m0_axi(bram_axi), // To BRAM for CPU mem access
-        .m1_axi(rv_gpu_axil) // To GPU SM register
+        .m1_axi(rv_gpu_axil), // To GPU SM register
+        .m2_axi(rv_uart_axil) // To UART
+    );
+
+    // UART Module
+    uart #(
+        .CLK_FREQ(125000000),
+        .BAUD_RATE(115200)
+    ) u_uart (
+        .clk(clk),
+        .rst_n(sys_rst_n),
+        .s_axi(rv_uart_axil),
+        .rx(uart_rxd),
+        .tx(uart_txd)
     );
 
     // BRAM Interface Adapter (0-cycle pseudo slave)
