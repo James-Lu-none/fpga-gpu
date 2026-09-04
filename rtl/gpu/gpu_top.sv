@@ -260,18 +260,22 @@ module gpu_top (
     // 128KB True Dual-Port Block Memory Generator
     blk_mem_gen_0 u_bram (
         .clka(brama_clk),
+        .rsta(brama_rst),
         .ena(brama_en),
         .wea(brama_we),
         .addra(brama_addr[16:2]),
         .dina(brama_din),
         .douta(brama_dout),
+        .rsta_busy(),
 
         .clkb(bramb_clk),
+        .rstb(bramb_rst),
         .enb(bramb_en),
         .web(bramb_we),
         .addrb(bramb_addr[16:2]),
         .dinb(bramb_din),
-        .doutb(bramb_dout)
+        .doutb(bramb_dout),
+        .rstb_busy()
     );
 
     // Interrupt Handshake Logic for PCIe XDMA
