@@ -8,16 +8,8 @@ classDiagram
         +M_AXI: DMA Data Transfer (64-bit)
     }
 
-    class gpu_top {
-        <<GPU Top Module>>
-    }
-
     class gpu_processing_cluster {
         <<Graphics Processing Cluster>>
-    }
-
-    class riscv_cp_system {
-        <<Command Processor SoC>>
     }
 
     class picorv32_axi {
@@ -84,6 +76,7 @@ classDiagram
 
     class axi_crossbar_0 {
         <<AXI Interconnect>>
+        address range for ddr3 memory is defined here: 2^30 address bits
         +S00: DWidth Converter (256-bit)
         +S01: GPU Hardware Engine (256-bit)
         +M00: Clock Converter (256-bit)
@@ -112,16 +105,8 @@ classDiagram
         +2-Stage Reset Synchronizer
         +HDMI Timing Gen & SiI9134 I2C
     }
-
-    %% Component Containment (Sub-modules)
-    gpu_top *-- riscv_cp_system
-    gpu_top *-- gpu_processing_cluster
     
     gpu_processing_cluster *-- gpu_streaming_multiprocessor
-
-    riscv_cp_system *-- picorv32_axi
-    riscv_cp_system *-- axi_lite_1to2_decoder
-    riscv_cp_system *-- riscv_bram
 
     gpu_streaming_multiprocessor *-- sm_warp_allocator
     gpu_streaming_multiprocessor *-- sm_processing_block
@@ -132,7 +117,8 @@ classDiagram
     sm_processing_block *-- sm_cuda_cores
 
     %% Data & Control Flow Connections
-    xdma_0 --> riscv_cp_system : 1a. AXI4-Lite (xdma_rv_axil to BRAM Port B)
+    xdma_0 --> riscv_bram : 1a. AXI4-Lite (xdma_rv_axil to BRAM Port B)
+    xdma_0 --> picorv32_axi : BRAM_MAILBOX interupt
     picorv32_axi --> axi_lite_1to2_decoder : 1b. AXI4-Lite (rv_axi)
     axi_lite_1to2_decoder --> riscv_bram : 1c. AXI4-Lite (bram_axi to Port A)
     
