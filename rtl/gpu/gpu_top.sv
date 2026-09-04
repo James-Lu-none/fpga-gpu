@@ -263,7 +263,7 @@ module gpu_top (
         .rsta(brama_rst),
         .ena(brama_en),
         .wea(brama_we),
-        .addra(brama_addr[16:2]),
+        .addra(brama_addr), // since byte write is enabled so we dont need to do 2 bit shift
         .dina(brama_din),
         .douta(brama_dout),
         .rsta_busy(),
@@ -272,7 +272,7 @@ module gpu_top (
         .rstb(bramb_rst),
         .enb(bramb_en),
         .web(bramb_we),
-        .addrb(bramb_addr[16:2]),
+        .addrb(bramb_addr), // since byte write is enabled so we dont need to do 2 bit shift
         .dinb(bramb_din),
         .doutb(bramb_dout),
         .rstb_busy()
