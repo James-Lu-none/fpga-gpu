@@ -110,13 +110,6 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PPRDIR/rtl/gpu/boot_ram.sv">
-        <FileInfo>
-          <Attr Name="UsedIn" Val="synthesis"/>
-          <Attr Name="UsedIn" Val="implementation"/>
-          <Attr Name="UsedIn" Val="simulation"/>
-        </FileInfo>
-      </File>
       <File Path="$PPRDIR/rtl/hdmi/colorbar_gen.sv">
         <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>
@@ -266,6 +259,14 @@
       </File>
       <File Path="$PPRDIR/rtl/top.sv">
         <FileInfo>
+          <Attr Name="UsedIn" Val="synthesis"/>
+          <Attr Name="UsedIn" Val="implementation"/>
+          <Attr Name="UsedIn" Val="simulation"/>
+        </FileInfo>
+      </File>
+      <File Path="$PPRDIR/rtl/gpu/boot_ram.sv">
+        <FileInfo>
+          <Attr Name="AutoDisabled" Val="1"/>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="implementation"/>
           <Attr Name="UsedIn" Val="simulation"/>
@@ -439,7 +440,6 @@
     <FileSet Name="axi_bram_ctrl_0" Type="BlockSrcs" RelSrcDir="$PSRCDIR/axi_bram_ctrl_0" RelGenDir="$PGENDIR/axi_bram_ctrl_0">
       <File Path="$PSRCDIR/sources_1/ip/axi_bram_ctrl_0/axi_bram_ctrl_0.xci">
         <FileInfo>
-          <Attr Name="AutoDisabled" Val="1"/>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="implementation"/>
           <Attr Name="UsedIn" Val="simulation"/>

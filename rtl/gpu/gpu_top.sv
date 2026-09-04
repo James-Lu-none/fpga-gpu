@@ -134,73 +134,99 @@ module gpu_top (
         .tx(uart_txd)
     );
 
-    // BRAM Interface Adapter (0-cycle pseudo slave)
-    assign bram_axi.awready = 1'b1;
-    assign bram_axi.wready = 1'b1;
-    assign bram_axi.arready = 1'b1;
-    
-    assign bram_axi.bvalid = bram_axi.awvalid && bram_axi.wvalid; 
-    assign bram_axi.rvalid = bram_axi.arvalid;
-    assign bram_axi.bresp = 2'b00;
-    assign bram_axi.rresp = 2'b00;
-    
-    wire [31:0] bram_dout_a;
-    assign bram_axi.rdata = bram_dout_a;
+    wire [16:0] brama_addr;
+    wire brama_clk, brama_en;
+    wire [3:0] brama_we;
+    wire [31:0] brama_din, brama_dout;
+    wire brama_rst;
 
-    // Host PCIe AXI-Lite Slave Interface (Port B: Direct BRAM & Mailbox)
-    reg host_bvalid;
-    reg host_rvalid;
+    wire [16:0] bramb_addr;
+    wire bramb_clk, bramb_en;
+    wire [3:0] bramb_we;
+    wire [31:0] bramb_din, bramb_dout;
+    wire bramb_rst;
 
-    always @(posedge clk or negedge sys_rst_n) begin
-        if (!sys_rst_n) begin
-            host_bvalid <= 1'b0;
-            host_rvalid <= 1'b0;
-        end else begin
-            if (s_axi_lite.awvalid && s_axi_lite.wvalid && !host_bvalid) begin
-                host_bvalid <= 1'b1;
-            end else if (s_axi_lite.bready && host_bvalid) begin
-                host_bvalid <= 1'b0;
-            end
+    // AXI BRAM Controller (Port A: RISC-V)
+    axi_bram_ctrl_0 u_bram_ctrl_rv (
+        .s_axi_aclk(clk),
+        .s_axi_aresetn(sys_rst_n),
+        .s_axi_awaddr(bram_axi.awaddr[16:0]),
+        .s_axi_awprot(bram_axi.awprot),
+        .s_axi_awvalid(bram_axi.awvalid),
+        .s_axi_awready(bram_axi.awready),
+        .s_axi_wdata(bram_axi.wdata),
+        .s_axi_wstrb(bram_axi.wstrb),
+        .s_axi_wvalid(bram_axi.wvalid),
+        .s_axi_wready(bram_axi.wready),
+        .s_axi_bresp(bram_axi.bresp),
+        .s_axi_bvalid(bram_axi.bvalid),
+        .s_axi_bready(bram_axi.bready),
+        .s_axi_araddr(bram_axi.araddr[16:0]),
+        .s_axi_arprot(bram_axi.arprot),
+        .s_axi_arvalid(bram_axi.arvalid),
+        .s_axi_arready(bram_axi.arready),
+        .s_axi_rdata(bram_axi.rdata),
+        .s_axi_rresp(bram_axi.rresp),
+        .s_axi_rvalid(bram_axi.rvalid),
+        .s_axi_rready(bram_axi.rready),
+        
+        .bram_rst_a(brama_rst),
+        .bram_clk_a(brama_clk),
+        .bram_en_a(brama_en),
+        .bram_we_a(brama_we),
+        .bram_addr_a(brama_addr),
+        .bram_wrdata_a(brama_din),
+        .bram_rddata_a(brama_dout)
+    );
 
-            if (s_axi_lite.arvalid && !host_rvalid) begin
-                host_rvalid <= 1'b1;
-            end else if (s_axi_lite.rready && host_rvalid) begin
-                host_rvalid <= 1'b0;
-            end
-        end
-    end
+    // AXI BRAM Controller (Port B: Host PCIe)
+    axi_bram_ctrl_0 u_bram_ctrl_host (
+        .s_axi_aclk(clk),
+        .s_axi_aresetn(sys_rst_n),
+        .s_axi_awaddr(s_axi_lite.awaddr[16:0]),
+        .s_axi_awprot(s_axi_lite.awprot),
+        .s_axi_awvalid(s_axi_lite.awvalid),
+        .s_axi_awready(s_axi_lite.awready),
+        .s_axi_wdata(s_axi_lite.wdata),
+        .s_axi_wstrb(s_axi_lite.wstrb),
+        .s_axi_wvalid(s_axi_lite.wvalid),
+        .s_axi_wready(s_axi_lite.wready),
+        .s_axi_bresp(s_axi_lite.bresp),
+        .s_axi_bvalid(s_axi_lite.bvalid),
+        .s_axi_bready(s_axi_lite.bready),
+        .s_axi_araddr(s_axi_lite.araddr[16:0]),
+        .s_axi_arprot(s_axi_lite.arprot),
+        .s_axi_arvalid(s_axi_lite.arvalid),
+        .s_axi_arready(s_axi_lite.arready),
+        .s_axi_rdata(s_axi_lite.rdata),
+        .s_axi_rresp(s_axi_lite.rresp),
+        .s_axi_rvalid(s_axi_lite.rvalid),
+        .s_axi_rready(s_axi_lite.rready),
 
-    assign s_axi_lite.arready = ~host_rvalid;
-    assign s_axi_lite.awready = ~host_bvalid;
-    assign s_axi_lite.wready = ~host_bvalid;
-    assign s_axi_lite.rvalid = host_rvalid;
-    assign s_axi_lite.bvalid = host_bvalid;
-    assign s_axi_lite.bresp = 2'b00; 
-    assign s_axi_lite.rresp = 2'b00; 
+        .bram_rst_a(bramb_rst),
+        .bram_clk_a(bramb_clk),
+        .bram_en_a(bramb_en),
+        .bram_we_a(bramb_we),
+        .bram_addr_a(bramb_addr),
+        .bram_wrdata_a(bramb_din),
+        .bram_rddata_a(bramb_dout)
+    );
 
-    wire [31:0] bram_dout_b;
-    assign s_axi_lite.rdata = bram_dout_b;
+    // 128KB True Dual-Port Block Memory Generator
+    blk_mem_gen_0 u_bram (
+        .clka(brama_clk),
+        .ena(brama_en),
+        .wea(brama_we),
+        .addra(brama_addr[16:2]),
+        .dina(brama_din),
+        .douta(brama_dout),
 
-    // 16KB Dual-Port BRAM (Port A: RISC-V, Port B: Host PCIe)
-    boot_ram #(
-        .MEM_SIZE_BYTES(16384)
-    ) u_bram (
-        .clk(clk),
-        .rst_n(sys_rst_n),
-
-        // Port A: RISC-V CPU
-        .en_a(bram_axi.arvalid || (bram_axi.awvalid && bram_axi.wvalid)),
-        .we_a((bram_axi.awvalid && bram_axi.wvalid) ? bram_axi.wstrb : 4'b0000),
-        .addr_a(bram_axi.arvalid ? bram_axi.araddr[13:0] : bram_axi.awaddr[13:0]),
-        .din_a(bram_axi.wdata),
-        .dout_a(bram_dout_a),
-
-        // Port B: Host PCIe (XDMA Direct BRAM Mailbox)
-        .en_b((s_axi_lite.arvalid && s_axi_lite.arready) || (s_axi_lite.awvalid && s_axi_lite.wvalid && s_axi_lite.awready)),
-        .we_b((s_axi_lite.awvalid && s_axi_lite.wvalid && s_axi_lite.awready) ? s_axi_lite.wstrb : 4'b0000),
-        .addr_b(s_axi_lite.arvalid ? s_axi_lite.araddr[13:0] : s_axi_lite.awaddr[13:0]),
-        .din_b(s_axi_lite.wdata),
-        .dout_b(bram_dout_b)
+        .clkb(bramb_clk),
+        .enb(bramb_en),
+        .web(bramb_we),
+        .addrb(bramb_addr[16:2]),
+        .dinb(bramb_din),
+        .doutb(bramb_dout)
     );
 
     // Interrupt Handshake Logic for PCIe XDMA
