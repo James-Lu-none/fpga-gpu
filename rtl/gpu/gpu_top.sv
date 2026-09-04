@@ -105,33 +105,78 @@ module gpu_top (
         .eoi()
     );
 
-    // RISC-V Memory Decoder
-    // 0x0000_xxxx : Mailbox BRAM (16KB)
-    // 0x1000_xxxx : GPU Engine
-    axi_lite_decoder #(
-        .ADDR_BASE_0(`ADDR_BASE_BRAM),
-        .ADDR_BASE_1(`ADDR_BASE_GPC),
-        .ADDR_BASE_2(16'h2000),
-        .REGISTER_RESPONSES(1)
-    ) u_decoder (
-        .clk(clk),
-        .rst_n(sys_rst_n),
-        .s_axi(rv_axi), // From RISC-V mem master
-        .m0_axi(bram_axi), // To BRAM for CPU mem access
-        .m1_axi(rv_gpu_axil), // To GPU SM register
-        .m2_axi(rv_uart_axil) // To UART
+    // AXI Crossbar (RISC-V -> BRAM, GPU, UART)
+    axi_crossbar_1to3_0 u_crossbar (
+        .aclk(clk),
+        .aresetn(sys_rst_n),
+        
+        // Slave 0 (From RISC-V)
+        .s_axi_awaddr  (rv_axi.awaddr),
+        .s_axi_awprot  (rv_axi.awprot),
+        .s_axi_awvalid (rv_axi.awvalid),
+        .s_axi_awready (rv_axi.awready),
+        .s_axi_wdata   (rv_axi.wdata),
+        .s_axi_wstrb   (rv_axi.wstrb),
+        .s_axi_wvalid  (rv_axi.wvalid),
+        .s_axi_wready  (rv_axi.wready),
+        .s_axi_bresp   (rv_axi.bresp),
+        .s_axi_bvalid  (rv_axi.bvalid),
+        .s_axi_bready  (rv_axi.bready),
+        .s_axi_araddr  (rv_axi.araddr),
+        .s_axi_arprot  (rv_axi.arprot),
+        .s_axi_arvalid (rv_axi.arvalid),
+        .s_axi_arready (rv_axi.arready),
+        .s_axi_rdata   (rv_axi.rdata),
+        .s_axi_rresp   (rv_axi.rresp),
+        .s_axi_rvalid  (rv_axi.rvalid),
+        .s_axi_rready  (rv_axi.rready),
+        
+        // Master Ports (M02: UART, M01: GPU, M00: BRAM)
+        .m_axi_awaddr  ({rv_uart_axil.awaddr, rv_gpu_axil.awaddr, bram_axi.awaddr}),
+        .m_axi_awprot  ({rv_uart_axil.awprot, rv_gpu_axil.awprot, bram_axi.awprot}),
+        .m_axi_awvalid ({rv_uart_axil.awvalid, rv_gpu_axil.awvalid, bram_axi.awvalid}),
+        .m_axi_awready ({rv_uart_axil.awready, rv_gpu_axil.awready, bram_axi.awready}),
+        .m_axi_wdata   ({rv_uart_axil.wdata,   rv_gpu_axil.wdata,   bram_axi.wdata}),
+        .m_axi_wstrb   ({rv_uart_axil.wstrb,   rv_gpu_axil.wstrb,   bram_axi.wstrb}),
+        .m_axi_wvalid  ({rv_uart_axil.wvalid,  rv_gpu_axil.wvalid,  bram_axi.wvalid}),
+        .m_axi_wready  ({rv_uart_axil.wready,  rv_gpu_axil.wready,  bram_axi.wready}),
+        .m_axi_bresp   ({rv_uart_axil.bresp,   rv_gpu_axil.bresp,   bram_axi.bresp}),
+        .m_axi_bvalid  ({rv_uart_axil.bvalid,  rv_gpu_axil.bvalid,  bram_axi.bvalid}),
+        .m_axi_bready  ({rv_uart_axil.bready,  rv_gpu_axil.bready,  bram_axi.bready}),
+        .m_axi_araddr  ({rv_uart_axil.araddr,  rv_gpu_axil.araddr,  bram_axi.araddr}),
+        .m_axi_arprot  ({rv_uart_axil.arprot,  rv_gpu_axil.arprot,  bram_axi.arprot}),
+        .m_axi_arvalid ({rv_uart_axil.arvalid, rv_gpu_axil.arvalid, bram_axi.arvalid}),
+        .m_axi_arready ({rv_uart_axil.arready, rv_gpu_axil.arready, bram_axi.arready}),
+        .m_axi_rdata   ({rv_uart_axil.rdata,   rv_gpu_axil.rdata,   bram_axi.rdata}),
+        .m_axi_rresp   ({rv_uart_axil.rresp,   rv_gpu_axil.rresp,   bram_axi.rresp}),
+        .m_axi_rvalid  ({rv_uart_axil.rvalid,  rv_gpu_axil.rvalid,  bram_axi.rvalid}),
+        .m_axi_rready  ({rv_uart_axil.rready,  rv_gpu_axil.rready,  bram_axi.rready})
     );
 
-    // UART Module
-    uart #(
-        .CLK_FREQ(125000000),
-        .BAUD_RATE(115200)
-    ) u_uart (
-        .clk(clk),
-        .rst_n(sys_rst_n),
-        .s_axi(rv_uart_axil),
-        .rx(uart_rxd),
-        .tx(uart_txd)
+    // AXI UART Lite
+    axi_uartlite_0 u_uart (
+        .s_axi_aclk    (clk),
+        .s_axi_aresetn (sys_rst_n),
+        .interrupt     (), // Unused
+        .s_axi_awaddr  (rv_uart_axil.awaddr[3:0]), // UARTLite uses 4-bit address
+        .s_axi_awvalid (rv_uart_axil.awvalid),
+        .s_axi_awready (rv_uart_axil.awready),
+        .s_axi_wdata   (rv_uart_axil.wdata),
+        .s_axi_wstrb   (rv_uart_axil.wstrb),
+        .s_axi_wvalid  (rv_uart_axil.wvalid),
+        .s_axi_wready  (rv_uart_axil.wready),
+        .s_axi_bresp   (rv_uart_axil.bresp),
+        .s_axi_bvalid  (rv_uart_axil.bvalid),
+        .s_axi_bready  (rv_uart_axil.bready),
+        .s_axi_araddr  (rv_uart_axil.araddr[3:0]), // UARTLite uses 4-bit address
+        .s_axi_arvalid (rv_uart_axil.arvalid),
+        .s_axi_arready (rv_uart_axil.arready),
+        .s_axi_rdata   (rv_uart_axil.rdata),
+        .s_axi_rresp   (rv_uart_axil.rresp),
+        .s_axi_rvalid  (rv_uart_axil.rvalid),
+        .s_axi_rready  (rv_uart_axil.rready),
+        .rx            (uart_rxd),
+        .tx            (uart_txd)
     );
 
     wire [16:0] brama_addr;
