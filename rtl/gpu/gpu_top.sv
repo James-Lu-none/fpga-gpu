@@ -56,10 +56,10 @@ module gpu_top (
             cpu_soft_rst_n <= 1'b0; // Default to Reset=0 so CPU waits for firmware load on boot
         end else begin
             // only takes lower 17 bits of address to ignore higher bits of PCIE BAR hardware address
-            irq_reg <= s_axi_lite.awvalid && s_axi_lite.wvalid && s_axi_lite.awready && (s_axi_lite.awaddr[16:0] == `BRAM_IRQ_BASE[16:0]);
+            irq_reg <= s_axi_lite.awvalid && s_axi_lite.wvalid && s_axi_lite.awready && ((s_axi_lite.awaddr & 32'h1FFFF) == `BRAM_IRQ_BASE);
             
             // CPU Soft Reset
-            if (s_axi_lite.awvalid && s_axi_lite.wvalid && s_axi_lite.awready && (s_axi_lite.awaddr[16:0] == `BRAM_CPU_RESET_BASE[16:0])) begin
+            if (s_axi_lite.awvalid && s_axi_lite.wvalid && s_axi_lite.awready && ((s_axi_lite.awaddr & 32'h1FFFF) == `BRAM_CPU_RESET_BASE)) begin
                 cpu_soft_rst_n <= s_axi_lite.wdata[0];
             end
         end
