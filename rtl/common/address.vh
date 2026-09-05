@@ -15,6 +15,9 @@
 // PCIe to RISC-V Direct Mailbox Window (256 bytes)
 `define BRAM_MAILBOX_BASE 32'h0000_3F00
 
+// CPU Soft Reset Control Register
+`define BRAM_CPU_RESET_BASE 32'h0000_3F10
+
 // 2. Graphics Processing Cluster (GPC / SM)
 // Base Address Region: 0x1000_XXXX
 `define ADDR_BASE_GPC 16'h1000
