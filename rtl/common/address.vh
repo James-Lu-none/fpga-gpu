@@ -9,14 +9,14 @@
 
 // PicoRV32 Configuration Addresses
 `define BRAM_PROGADDR_RESET 32'h0000_0000
-`define BRAM_PROGADDR_IRQ 32'h0000_0010
-`define BRAM_STACKADDR 32'h0000_3E00
+`define BRAM_PROGADDR_IRQ   32'h0000_0010
+`define BRAM_STACKADDR      32'h0001_0000 // Stack grows downwards from 64KB
 
-// PCIe to RISC-V Direct Mailbox Window (256 bytes)
-`define BRAM_MAILBOX_BASE 32'h0000_3F00
+// Shared BRAM regions at the top of 128KB
+`define BRAM_RING_BUFFER_BASE 32'h0001_8000 // GPU Command Queue
+`define BRAM_IRQ_BASE         32'h0001_FFE0 // IRQ register (1FFE0 to 1FFEF)
+`define BRAM_CPU_RESET_BASE   32'h0001_FFF0 // CPU Soft Reset Control Register (1FFF0 to 1FFFF)
 
-// CPU Soft Reset Control Register
-`define BRAM_CPU_RESET_BASE 32'h0000_3F10
 
 // 2. Graphics Processing Cluster (GPC / SM)
 // Base Address Region: 0x1000_XXXX

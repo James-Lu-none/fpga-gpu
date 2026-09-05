@@ -48,16 +48,14 @@ module gpu_top (
     // 1. RISC-V Command Processor SoC (Control Plane)
     
     // Host Control Registers (Sniffed from AXI Lite Write Channel)
-    reg doorbell_irq_reg;
+    reg irq_reg;
     reg cpu_soft_rst_n; // CPU Soft Reset Control Register
-
     always @(posedge clk or negedge sys_rst_n) begin
         if (!sys_rst_n) begin
-            doorbell_irq_reg <= 1'b0;
+            irq_reg <= 1'b0;
             cpu_soft_rst_n <= 1'b0; // Default to Reset=0 so CPU waits for firmware load on boot
         end else begin
-            // Mailbox Doorbell
-            doorbell_irq_reg <= s_axi_lite.awvalid && s_axi_lite.wvalid && s_axi_lite.awready && (s_axi_lite.awaddr == `BRAM_MAILBOX_BASE);
+            irq_reg <= s_axi_lite.awvalid && s_axi_lite.wvalid && s_axi_lite.awready && (s_axi_lite.awaddr == `BRAM_IRQ_BASE);
             
             // CPU Soft Reset
             if (s_axi_lite.awvalid && s_axi_lite.wvalid && s_axi_lite.awready && (s_axi_lite.awaddr == `BRAM_CPU_RESET_BASE)) begin
@@ -110,7 +108,7 @@ module gpu_top (
         .pcpi_wait(1'b0),
         .pcpi_ready(1'b0),
         
-        .irq({31'd0, doorbell_irq_reg}),
+        .irq({31'd0, irq_reg}),
         .eoi()
     );
 
