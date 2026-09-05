@@ -108,3 +108,13 @@ hw_handoff
 ipshared
 
 reports
+
+# Vivado generated runs in root directory
+synth_*/
+impl_*/
+
+# Bitstream files
+*.bit
+*.bin
+*.pdi
+*.mcs
