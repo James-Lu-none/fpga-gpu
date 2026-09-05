@@ -22,6 +22,8 @@ wait_on_run impl_1
 
 open_run impl_1 -name impl_1
 
+write_bitstream -force ./top.bit -bin_file
+
 report_utilization -hierarchical -format xml -file ./reports/utilization.xml
 report_timing -delay_type max -max_paths 50 -sort_by group -nworst 2 -file ./reports/timing.txt
 
