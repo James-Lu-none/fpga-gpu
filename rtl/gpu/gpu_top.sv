@@ -55,10 +55,11 @@ module gpu_top (
             irq_reg <= 1'b0;
             cpu_soft_rst_n <= 1'b0; // Default to Reset=0 so CPU waits for firmware load on boot
         end else begin
-            irq_reg <= s_axi_lite.awvalid && s_axi_lite.wvalid && s_axi_lite.awready && (s_axi_lite.awaddr == `BRAM_IRQ_BASE);
+            // only takes lower 17 bits of address to ignore higher bits of PCIE BAR hardware address
+            irq_reg <= s_axi_lite.awvalid && s_axi_lite.wvalid && s_axi_lite.awready && (s_axi_lite.awaddr[16:0] == `BRAM_IRQ_BASE[16:0]);
             
             // CPU Soft Reset
-            if (s_axi_lite.awvalid && s_axi_lite.wvalid && s_axi_lite.awready && (s_axi_lite.awaddr == `BRAM_CPU_RESET_BASE)) begin
+            if (s_axi_lite.awvalid && s_axi_lite.wvalid && s_axi_lite.awready && (s_axi_lite.awaddr[16:0] == `BRAM_CPU_RESET_BASE[16:0])) begin
                 cpu_soft_rst_n <= s_axi_lite.wdata[0];
             end
         end
@@ -197,6 +198,8 @@ module gpu_top (
     wire [3:0] bramb_we;
     wire [31:0] bramb_din, bramb_dout;
     wire bramb_rst;
+
+    // all axi controllers to BRAM only takes lower 17 bits of address to ignore higher bits of PCIE BAR hardware address
 
     // AXI BRAM Controller (Port A: RISC-V)
     axi_bram_ctrl_0 u_bram_ctrl_rv (
