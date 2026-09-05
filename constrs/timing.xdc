@@ -34,8 +34,10 @@ set_property CFGBVS VCCO [current_design]
 set_property BITSTREAM.CONFIG.SPI_BUSWIDTH 4 [current_design]
 # set flash to use 4 data pins
 set_property CONFIG_MODE SPIx4 [current_design]
-# set flash read clock frequency to 33 MHz
-set_property BITSTREAM.CONFIG.CONFIGRATE 33 [current_design]
+# set flash read clock frequency to 50 MHz for faster boot (important for PCIe)
+set_property BITSTREAM.CONFIG.CONFIGRATE 50 [current_design]
+# enable SPI_FALL_EDGE for better high-speed stability
+set_property BITSTREAM.CONFIG.SPI_FALL_EDGE YES [current_design]
 # since flash fails at about 8MB everytime, so we enable compression to make bitstream smaller
 set_property BITSTREAM.GENERAL.COMPRESS TRUE [current_design]
 
