@@ -1,0 +1,23 @@
+# Build and temporary files
+*.log
+*.jou
+*.str
+*.tmp
+*.swp
+*~
+
+# Compiled binaries and modules
+*.o
+*.ko
+*.mod
+*.mod.c
+*.mod.o
+*.symvers
+*.order
+*.bin
+*.elf
+*.hex
+
+# OS files
+.DS_Store
+Thumbs.db

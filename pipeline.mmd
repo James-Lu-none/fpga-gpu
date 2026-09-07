@@ -1,0 +1,161 @@
+sequenceDiagram
+    autonumber
+    actor Host as Host PC (Linux Driver)
+    participant XDMA as PCIe DMA (xdma_0)
+    participant BRAM as Mailbox/Ring Buffer (128KB BRAM)
+    participant RV_CTRL as RV Control Regs (0x0002_0000)
+    participant RV as RISC-V PicoRV32 (CP)
+    participant GPC_REG as GPC Control Regs (0x1000_0000)
+    participant TBS as GigaThread TBS (Scheduler)
+    participant SM_RX as SM Block Receiver (block_receiver)
+    participant WCTX as Warp Context (warp_context)
+    participant PIPE as Fetch/Decode & VRF
+    participant EXEC as Execution (ALU & PC)
+    participant LSU as Decoupled LSU
+    participant L1 as SM L1 Cache (2KB)
+    participant L2 as Shared L2 Cache (16KB)
+    participant DDR as 1GB DDR3 VRAM (MIG)
+
+    %% -------------------------------------------------------------------------
+    %% Phase 1: Program Binary Loading & Buffer Setup
+    %% -------------------------------------------------------------------------
+    rect rgb(240, 248, 255)
+    Note over Host, DDR: Phase 1: Program Binary Loading & Buffer Setup
+    Host->>DDR: Write input vector data to DDR3 VRAM via PCIe XDMA (64-bit -> 256-bit)
+    Host->>GPC_REG: Write to 4KB I-RAM Broadcast Window (0x1000_1000 ~ 0x1000_1FFF)
+    GPC_REG->>PIPE: Broadcast instruction words (iram_we, iram_waddr, iram_wdata)
+    Note over PIPE: I-RAM (1024x32-bit BRAM) stores Custom ISA kernel instructions
+    end
+
+    %% -------------------------------------------------------------------------
+    %% Phase 2: Task Dispatch & Doorbell
+    %% -------------------------------------------------------------------------
+    rect rgb(255, 250, 240)
+    Note over Host, RV: Phase 2: Task Dispatch & Doorbell
+    Host->>BRAM: Write 64-byte cuda_task_descriptor_t to Ring Buffer (0x0001_8000) via XDMA BAR0 AXI-Lite
+    Host->>BRAM: Update Ring Buffer tail pointer
+    opt Hardware Doorbell Interrupt (Optional)
+        Host->>RV_CTRL: Write CTRL_REG_IRQ (0x0002_0000)
+        RV_CTRL-->>RV: Assert irq_out -> picorv32 irq[0]
+    end
+    RV->>BRAM: Read Task Descriptor (grid/block dimensions, dma_src_addr, dma_dst_addr)
+    end
+
+    %% -------------------------------------------------------------------------
+    %% Phase 3: GPC Hardware Configuration & Launch
+    %% -------------------------------------------------------------------------
+    rect rgb(245, 255, 250)
+    Note over RV, GPC_REG: Phase 3: GPC Hardware Configuration & Launch
+    RV->>GPC_REG: Write REG_GRID_DIM_X/Y (0x0C, 0x10)
+    RV->>GPC_REG: Write REG_BLOCK_DIM_X/Y (0x14, 0x18)
+    RV->>GPC_REG: Write REG_SRC_ADDR / REG_DST_ADDR (0x20, 0x24)
+    RV->>GPC_REG: Write REG_DOORBELL = 1 (0x00) to generate 1-cycle hw_trigger pulse
+    GPC_REG->>TBS: Trigger Thread Block Scheduler (hw_trigger)
+    end
+
+    %% -------------------------------------------------------------------------
+    %% Phase 4: Dynamic Thread Block Scheduling & Warp Allocation
+    %% -------------------------------------------------------------------------
+    rect rgb(255, 245, 245)
+    Note over TBS, WCTX: Phase 4: Dynamic Thread Block Scheduling & Warp Allocation
+    loop Thread Block Dispatch (TBS FSM)
+        WCTX-->>TBS: Report available warp slots (sm_available_warp_slots, MAX_WARPS=8)
+        TBS->>TBS: Compare available SM slots and select least busy SM (STATE_ISSUE)
+        TBS->>SM_RX: Issue block (block_issue_valid, block_idx_x/y, warps_per_block)
+        SM_RX-->>TBS: Acknowledge block_accepted (Handshake complete)
+        
+        loop Warp Slicing & Allocation (ST_ISSUE_WARP)
+            SM_RX->>WCTX: Allocate single warp (warp_alloc_if: valid, block_id, thread_id_start, mask=0xFFFFFFFF)
+            WCTX->>WCTX: Allocate free slot (free_warp_idx), set STATE_READY, PC=0
+        end
+    end
+    end
+
+    %% -------------------------------------------------------------------------
+    %% Phase 5: SIMT Sub-Core Pipeline & Decoupled Memory Access
+    %% -------------------------------------------------------------------------
+    rect rgb(248, 248, 255)
+    Note over WCTX, DDR: Phase 5: SIMT Sub-Core Pipeline & Decoupled Memory Access
+    loop Warp Execution Loop (Round-Robin Micro-Scheduler)
+        WCTX->>PIPE: Issue ready warp (issue_if: warp_id, pc, active_mask, block_idx, tid)
+        Note over WCTX: Mark warp as STATE_STALL to prevent re-issuing before completion
+        
+        PIPE->>PIPE: Fetch (1-cycle I-RAM read) -> Decode (Opcode, Rd, Rs1, Rs2, Imm)
+        PIPE->>PIPE: Read 2-Lane 64-bit vector operands from VRF (operand_if)
+
+        alt ALU Instructions (ADD, SUB, MUL, CMP, ADDI, S2R)
+            PIPE->>EXEC: Forward operands to 2-Lane SIMD ALU (operand_if)
+            Note over EXEC: Stage EX1: Pipelined DSP arithmetic (Add/Sub/Mul)<br/>Stage EX2: Compute NZP condition codes and S2R special registers (TID, BID)
+            EXEC->>PIPE: Stage EX3: Write back to Vector Register File (wb_if: rd, data[63:0], mask)
+            EXEC->>WCTX: Context write-back (ctx_wb_if: next_pc = pc + 1, set STATE_READY)
+        
+        else Branch & Divergence Instructions (OP_BR, OP_SYNC)
+            PIPE->>EXEC: Forward operands to PC branch evaluation unit
+            alt Branch Divergent (Some lanes evaluate true, some evaluate false)
+                Note over EXEC: Split Active Mask into taken_mask and not_taken_mask
+                EXEC->>WCTX: ctx_wb_if (is_divergent=1, taken_mask, not_taken_mask, target_pc)
+                Note over WCTX: Push {pc+1, not_taken_mask} onto 4-deep SIMT Stack<br/>Execute taken path first (mask=taken_mask, pc=target_pc)
+            else Branch Non-Divergent (All Taken or All Not Taken)
+                EXEC->>WCTX: ctx_wb_if (next_pc, set STATE_READY)
+            else Branch Reconvergence (OP_SYNC Instruction)
+                EXEC->>WCTX: ctx_wb_if (is_sync=1)
+                Note over WCTX: Pop previously unexecuted branch path from SIMT Stack
+            end
+
+        else Decoupled Memory Instructions (OP_LDR, OP_STR)
+            PIPE->>LSU: Offload to Decoupled Load/Store Unit (operand_if)
+            Note over WCTX: SM can immediately issue instructions from OTHER warps (Latency Hiding)
+            LSU->>L1: Issue 64-bit memory request (req_valid, addr, wdata, we)
+            
+            alt L1 Cache Hit (2KB Direct-Mapped)
+                L1-->>LSU: Return 64-bit data in 1 cycle (rsp_valid, rdata)
+            else L1 Cache Miss
+                L1->>L2: Issue 256-bit line request (l2_req_valid, 32B aligned)
+                alt L2 Cache Hit (16KB Shared Direct-Mapped)
+                    L2-->>L1: Return 256-bit cache line
+                else L2 Cache Miss
+                    L2->>DDR: Issue AXI4-Full 256-bit burst via Crossbar/CDC (m_axi_gmem)
+                    DDR-->>L2: DDR3 read data returned
+                    Note over L2: Update L2 Tag RAM & Data RAM
+                end
+                L2-->>L1: Return 256-bit line and update L1 Tag & Data RAM
+                L1-->>LSU: Return requested 64-bit data
+            end
+            
+            LSU->>PIPE: Write back load data to VRF (wb_if, higher priority than ALU)
+            LSU->>WCTX: Advance PC and restore warp to STATE_READY (ctx_lsu_wb)
+
+        else Exit Instruction (OP_EXIT)
+            PIPE->>EXEC: Execute EXIT instruction
+            EXEC->>WCTX: ctx_wb_if (is_done=1)
+            Note over WCTX: Set warp state to STATE_DONE, incrementing available slots
+        end
+    end
+    end
+
+    %% -------------------------------------------------------------------------
+    %% Phase 6: Task Completion, Interrupt Notification & Host Handshake
+    %% -------------------------------------------------------------------------
+    rect rgb(240, 255, 240)
+    Note over TBS, Host: Phase 6: Task Completion, Interrupt Notification & Host Handshake
+    TBS->>TBS: Detect all blocks dispatched and all SMs idle (available_slots == MAX_WARPS)
+    TBS->>GPC_REG: Assert grid_done status
+    GPC_REG->>GPC_REG: Set REG_INT_STATUS (Bit 0 of 0x1000_0004) = 1
+
+    loop Firmware Polling Loop
+        RV->>GPC_REG: Poll REG_INT_STATUS until completion is detected
+    end
+    RV->>GPC_REG: Write REG_INT_ACK = 1 (0x1000_0008) to clear hardware interrupt flag
+
+    RV->>BRAM: Update Ring Buffer head pointer (ring->head = local_head)
+    
+    opt Hardware Trap Notification (Optional)
+        RV->>RV: Execute __builtin_trap() (triggers internal_cp_trap pin)
+        Note over XDMA: gpu_top detects trap rising edge and asserts usr_irq_req
+        XDMA-->>Host: Send PCIe MSI / Legacy hardware interrupt to Host
+        Host->>XDMA: Send usr_irq_ack to clear interrupt
+    end
+
+    Host->>DDR: Read computation output from DDR3 via PCIe XDMA 64-bit Master DMA
+    Note over Host: Host Driver receives data, task completed (VGPU Task Finished)
+    end

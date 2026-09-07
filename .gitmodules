@@ -1,0 +1,9 @@
+[submodule "fpga-gpu-hardware"]
+	path = fpga-gpu-hardware
+	url = https://github.com/James-Lu-none/fpga-gpu-hardware
+[submodule "fpga-gpu-driver"]
+	path = fpga-gpu-driver
+	url = https://github.com/James-Lu-none/fpga-gpu-driver
+[submodule "fpga-gpu-firmware"]
+	path = fpga-gpu-firmware
+	url = https://github.com/James-Lu-none/fpga-gpu-firmware

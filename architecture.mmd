@@ -1,0 +1,319 @@
+classDiagram
+    direction TB
+
+    %% =========================================================================
+    %% Top-Level SoC & Board Infrastructure
+    %% =========================================================================
+    class top {
+        <<Pure Verilog Top-Level SoC (XC7A200T)>>
+        +Clocks: PCIe 100MHz, DDR3 200MHz, HDMI 148.5MHz
+        +PCIe Gen2 x1 Transceiver (Bank 216)
+        +DDR3 SDRAM 32-bit Bus (Bank 34/35 MT41J256M16HA x2)
+        +SiI9134 HDMI 1080P60 RGB Video Ports
+        +Status LEDs: led1(Trap), led2(Calib), led3(MIG Ready), led4(DMA)
+        +Buttons & UART: reset, key1-4, uart_rxd/txd
+    }
+
+    class xdma_0 {
+        <<Xilinx PCIe Gen2 x1 DMA Subsystem>>
+        +Clock: pcie_ref_clk -> axi_aclk (125MHz)
+        +M_AXI_LITE: BAR0 Host Control Bus (32-bit)
+        +M_AXI: Host DMA Data Transfer (64-bit, ID_W=4)
+        +usr_irq_req / usr_irq_ack: MSI/Legacy IRQ
+    }
+
+    class axi_dwidth_converter_0 {
+        <<AXI Data Width Converter>>
+        +Clock: axi_aclk (125MHz)
+        +S_AXI: 64-bit AXI4 (from XDMA, ID_W=4)
+        +M_AXI: 256-bit AXI4 (to Crossbar S01, ID_W=1)
+    }
+
+    class axi_crossbar_0 {
+        <<AXI Interconnect 2S x 1M>>
+        +Clock: axi_aclk (125MHz)
+        +S00: GPGPU Compute Core (256-bit, ID_W=1)
+        +S01: Host PCIe DMA (256-bit, ID_W=1)
+        +M00: Memory Controller CDC (256-bit, ID_W=2)
+    }
+
+    class axi_clock_converter_0 {
+        <<AXI Clock Converter (CDC)>>
+        +S_AXI: axi_aclk (125MHz, ID_W=2)
+        +M_AXI: ui_clk (100MHz, ID_W=2)
+        +Data Width: 256-bit AXI4-Full
+    }
+
+    class mig_7series_0 {
+        <<1GB DDR3 VRAM Controller>>
+        +Clock: ui_clk (100MHz) / 200MHz sys_clk
+        +Base Address: 0x8000_0000 ~ 0xBFFF_FFFF
+        +S_AXI: 256-bit AXI4-Full Slave (ID_W=2)
+        +Physical: 32-bit DDR3 SDRAM (MT41J256M16HA x2)
+    }
+
+    class framebuffer_ram {
+        <<True Dual-Port Video BRAM>>
+        +Resolution: 640x480 x 24-bit RGB
+        +Port A: GPU Write (125MHz axi_aclk)
+        +Port B: HDMI Read (148.5MHz clk_pix)
+    }
+
+    class hdmi_top {
+        <<SiI9134 HDMI Display Controller>>
+        +u_mmcm_pixclk: 125MHz -> 148.5MHz (1080P60 Pixel Clock)
+        +timing_gen: Video Sync (HS, VS, DE)
+        +i2c_init: SiI9134 I2C Hardware Configurator
+        +colorbar_gen: Test Pattern Generator
+    }
+
+    %% =========================================================================
+    %% GPU Top Module (Control Plane + Compute Plane)
+    %% =========================================================================
+    class gpu_top {
+        <<GPU Top Subsystem>>
+        +Reset Synchronizer (rst_sync_reg)
+        +Host Interrupt Generator (rv_trap edge detector)
+        +Control Plane: PicoRV32 Command Processor
+        +Compute Plane: Graphics Processing Cluster (GPC)
+    }
+
+    class picorv32_axi {
+        <<RISC-V Command Processor (PicoRV32)>>
+        +ISA: RV32IMC (Baremetal Firmware)
+        +Reset PC: 0x0000_0000, Stack: 0x0001_0000
+        +mem_axi: 32-bit AXI4-Lite Master (rv_axi)
+        +irq[0]: Host Doorbell IRQ
+        +trap: Trap output -> usr_irq_req
+    }
+
+    class axi_crossbar_1 {
+        <<AXI-Lite Crossbar 2S x 4M (32-bit)>>
+        +S00: RISC-V CPU (rv_axi)
+        +S01: Host PCIe XDMA BAR0 (s_axi_lite)
+        +M00: 128KB Mailbox/Firmware BRAM (0x0000_0000)
+        +M01: Host/CPU Control Registers (0x0002_0000)
+        +M02: GPC MMIO & I-RAM Window (0x1000_0000)
+        +M03: AXI UART Lite (0x2000_0000)
+    }
+
+    class riscv_bram {
+        <<128KB Single-Port BRAM & Controller>>
+        +axi_bram_ctrl_0 + blk_mem_gen_0
+        +Firmware & Stack: 0x0000_0000 ~ 0x0001_7FFF
+        +Ring Buffer & Mailbox: 0x0001_8000 ~ 0x0001_FFFF
+        +cuda_task_descriptor_t (64 bytes)
+    }
+
+    class rv_control_register_0 {
+        <<Host Control & Reset Peripheral>>
+        +0x00: Host IRQ Doorbell (irq_out -> picorv32)
+        +0x04: CPU Soft Reset (cpu_soft_rst_n_out)
+    }
+
+    class axi_uartlite_0 {
+        <<AXI UART Lite (115200 Baud)>>
+        +Base Address: 0x2000_0000
+        +Registers: RX (0x0), TX (0x4), Status (0x8), Ctrl (0xC)
+        +Physical: uart_rxd, uart_txd (Debug Log)
+    }
+
+    %% =========================================================================
+    %% Graphics Processing Cluster (GPC)
+    %% =========================================================================
+    class gpc_top {
+        <<Graphics Processing Cluster>>
+        +Base Address: 0x1000_0000
+        +GigaThread Engine & SM Array
+        +Shared L2 Cache & 256-bit AXI4 Master
+    }
+
+    class gpc_control_register {
+        <<GPC Control & I-RAM Broadcast>>
+        +0x00: hw_trigger (Scheduler Launch Pulse)
+        +0x04: grid_done_reg (Hardware Status Flag)
+        +0x08: INT_ACK (Clears grid_done_reg)
+        +0x0C~0x18: grid_dim_x/y, block_dim_x/y
+        +0x20~0x24: src_addr, dst_addr (DDR3 VRAM)
+        +0x1000~0x1FFF: 4KB I-RAM Broadcast Window
+    }
+
+    class thread_block_scheduler {
+        <<Dynamic TBS / GigaThread Engine>>
+        +Tracks available_warp_slots per SM
+        +Greedy Load-Balancing Dispatcher
+        +FSM: IDLE -> ISSUE -> WAIT_ACK -> WAIT_DONE
+        +Raises grid_done when all blocks done & SMs idle
+    }
+
+    class l2_cache {
+        <<Shared L2 Data Cache (16KB)>>
+        +Capacity: 512 lines x 32 Bytes (Direct-Mapped)
+        +Policy: Write-Through, Read-Allocate
+        +Round-Robin Arbiter for SM0/SM1 L1 Requests
+        +m_axi_gmem: 256-bit AXI4-Full Master to DDR3
+    }
+
+    %% =========================================================================
+    %% Streaming Multiprocessor (SM) Subsystem
+    %% =========================================================================
+    class streaming_multiprocessor {
+        <<Streaming Multiprocessor (SM0)>>
+        +Local Block Receiver & Scheduler
+        +2KB L1 Data Cache
+        +Sub-Core SIMT Processing Block
+    }
+
+    class block_receiver {
+        <<SM Block Receiver / Slicer>>
+        +Receives (block_idx_x, y, warps_per_block)
+        +FSM: ST_IDLE -> ST_ISSUE_WARP -> ST_WAIT -> ST_NEXT
+        +Slices Block into 32-thread Warps
+        +Allocates into warp_context via warp_alloc_if
+    }
+
+    class l1_cache {
+        <<SM L1 Data Cache (2KB)>>
+        +Capacity: 64 lines x 32 Bytes (Direct-Mapped)
+        +Policy: Write-Through, Read-Allocate
+        +LSU Interface: 64-bit Data (2 lanes x 32-bit)
+        +L2 Interface: 256-bit Line Handshake
+    }
+
+    class processing_block {
+        <<Sub-Core SIMT Execution Block>>
+        +True SIMT Architecture (2 Lanes x 32-bit)
+        +Warp Context, Fetch/Decode, VRF, ALU, PC, LSU
+    }
+
+    class warp_context {
+        <<Warp Context RAM & Micro-Scheduler>>
+        +8 Resident Warps (MAX_WARPS=8)
+        +Zero-Overhead Round-Robin Scheduler
+        +Hardware SIMT Stack (Depth 4 per warp)
+        +Handles Branch Divergence & Reconvergence
+    }
+
+    class fetch_decode {
+        <<Instruction Fetch & Decode>>
+        +4KB I-RAM (1024 x 32-bit BRAM)
+        +1-Cycle Fetch Latency
+        +Custom ISA: R-Type, I-Type, J-Type Decoders
+        +Opcodes: ADD, SUB, MUL, CMP, ADDI, S2R, LDR, STR, BR, SYNC, EXIT
+    }
+
+    class vector_regfile {
+        <<Vector Register File (VRF)>>
+        +32 Architecture Registers (NUM_REGS=32)
+        +64-bit Vector Width (2 SIMD Lanes x 32-bit)
+        +2R1W Dual-Port BRAM
+    }
+
+    class alu {
+        <<2-Lane SIMD Arithmetic Unit>>
+        +EX1 Stage: Pipelined DSP (ADD, SUB, MUL)
+        +EX2 Stage: NZP Condition Codes & S2R Mux
+        +EX3 Stage: Register Write-Back (wb_if)
+        +Lane Predication Masking (active_mask)
+    }
+
+    class pc {
+        <<Program Counter & Branch Unit>>
+        +Tracks Condition Codes (NZP per warp, per lane)
+        +Branch Condition Evaluation (branch_cond & NZP)
+        +Divergence Splitting: taken_mask & not_taken_mask
+        +Next PC Calculation & ctx_wb Generation
+    }
+
+    class lsu {
+        <<Decoupled Load/Store Unit>>
+        +Offloads LDR / STR to L1 Cache
+        +Decoupled Execution (Hides Memory Latency)
+        +1 Outstanding Request Tracker
+        +Write-Back Arbiter Priority over ALU
+    }
+
+    %% =========================================================================
+    %% Structural Hierarchy (Containment)
+    %% =========================================================================
+    top *-- xdma_0
+    top *-- axi_dwidth_converter_0
+    top *-- axi_crossbar_0
+    top *-- axi_clock_converter_0
+    top *-- mig_7series_0
+    top *-- framebuffer_ram
+    top *-- hdmi_top
+    top *-- gpu_top
+
+    gpu_top *-- picorv32_axi
+    gpu_top *-- axi_crossbar_1
+    gpu_top *-- riscv_bram
+    gpu_top *-- rv_control_register_0
+    gpu_top *-- axi_uartlite_0
+    gpu_top *-- gpc_top
+
+    gpc_top *-- gpc_control_register
+    gpc_top *-- thread_block_scheduler
+    gpc_top *-- l2_cache
+    gpc_top *-- streaming_multiprocessor
+
+    streaming_multiprocessor *-- block_receiver
+    streaming_multiprocessor *-- l1_cache
+    streaming_multiprocessor *-- processing_block
+
+    processing_block *-- warp_context
+    processing_block *-- fetch_decode
+    processing_block *-- vector_regfile
+    processing_block *-- alu
+    processing_block *-- pc
+    processing_block *-- lsu
+
+    %% =========================================================================
+    %% Data & Control Flow Connections
+    %% =========================================================================
+    %% Host Control Plane (AXI4-Lite)
+    xdma_0 --> axi_crossbar_1 : 1a. BAR0 AXI4-Lite (xdma_rv_axil)
+    picorv32_axi --> axi_crossbar_1 : 1b. CPU Master AXI4-Lite (rv_axi)
+
+    axi_crossbar_1 --> riscv_bram : 1c. M00 (0x0000_0000) Firmware & Mailbox
+    axi_crossbar_1 --> rv_control_register_0 : 1d. M01 (0x0002_0000) IRQ & Reset Regs
+    axi_crossbar_1 --> gpc_control_register : 1e. M02 (0x1000_0000) GPC & I-RAM Window
+    axi_crossbar_1 --> axi_uartlite_0 : 1f. M03 (0x2000_0000) Debug UART
+
+    rv_control_register_0 --> picorv32_axi : 1g. irq_out -> picorv32 irq[0]
+    picorv32_axi --> xdma_0 : 1h. trap edge -> usr_irq_req (Host PCIe Interrupt)
+
+    %% Host & GPU Data Plane (AXI4-Full 256-bit to DDR3)
+    xdma_0 --> axi_dwidth_converter_0 : 2a. AXI4 64-bit DMA (xdma_dwconv_axi)
+    axi_dwidth_converter_0 --> axi_crossbar_0 : 2b. S01 AXI4 256-bit (dwconv_xbar_axi)
+    l2_cache --> axi_crossbar_0 : 2c. S00 AXI4 256-bit (gpu_xbar_axi)
+    axi_crossbar_0 --> axi_clock_converter_0 : 2d. M00 AXI4 256-bit @125MHz (xbar_cdc_axi)
+    axi_clock_converter_0 --> mig_7series_0 : 2e. AXI4 256-bit @100MHz (cdc_mig_axi)
+
+    %% Compute Control & Task Dispatch
+    gpc_control_register --> thread_block_scheduler : 3a. hw_trigger, grid/block dims
+    gpc_control_register --> fetch_decode : 3b. I-RAM Broadcast (0x1000~0x1FFF)
+    thread_block_scheduler --> block_receiver : 4a. sm_block_issue (block_idx, warps)
+    block_receiver --> warp_context : 4b. Allocate Warps (warp_alloc_if)
+    warp_context --> thread_block_scheduler : 4c. available_warp_slots Feedback
+
+    %% Sub-Core SIMT Execution Pipeline
+    warp_context --> fetch_decode : 5a. Issue Ready PC (issue_if)
+    fetch_decode --> vector_regfile : 5b. Decoded Regs & Imm (decode_if)
+    vector_regfile --> alu : 5c. Vector Operands (operand_if)
+    vector_regfile --> pc : 5d. Operands & Target (operand_if)
+    vector_regfile --> lsu : 5e. Address & Data (operand_if)
+
+    alu --> vector_regfile : 6a. ALU Result Write-Back (wb_if)
+    alu --> pc : 6b. NZP Condition Flags, Branch/Sync/Exit
+    pc --> warp_context : 6c. Next PC, SIMT Divergence/Reconverge (ctx_wb_if)
+
+    %% Memory Hierarchy
+    lsu --> l1_cache : 7a. 64-bit Memory Req (req_valid/we/addr/wdata)
+    l1_cache --> l2_cache : 7b. 256-bit Cache Line Miss/Write-Through
+    l1_cache --> lsu : 7c. 64-bit Read Data (rsp_valid/rdata)
+    lsu --> vector_regfile : 7d. Load Data Write-Back (wb_if)
+    lsu --> warp_context : 7e. Advance PC on Complete (ctx_wb_if)
+
+    %% Display Pipeline
+    framebuffer_ram --> hdmi_top : 8. Pixel Stream to SiI9134 Transmitter
