@@ -7,3 +7,6 @@
 [submodule "fpga-gpu-firmware"]
 	path = fpga-gpu-firmware
 	url = https://github.com/James-Lu-none/fpga-gpu-firmware
+[submodule "fpga-gpu-compiler"]
+	path = fpga-gpu-compiler
+	url = https://github.com/James-Lu-none/fpga-gpu-compiler

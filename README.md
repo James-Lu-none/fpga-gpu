@@ -1,6 +1,6 @@
 # FPGA-GPU: Full-Stack GPGPU Accelerator on Xilinx Artix-7 FPGA
 
-FPGA-GPU is an open-source, full-stack GPGPU accelerator designed for the Xilinx Artix-7 (XC7A200T) FPGA on the ALINX AX7A200B development platform. It integrates custom hardware RTL, baremetal RISC-V on-chip firmware, and a high-performance Linux kernel driver supporting Unified Virtual Memory (UVM) and direct Scatter-Gather PCIe DMA.
+FPGA-GPU is an open-source, full-stack GPGPU accelerator designed for the Xilinx Artix-7 (XC7A200T) FPGA on the ALINX AX7A200B development platform. It integrates custom hardware RTL, baremetal RISC-V on-chip firmware, an LLVM-based compiler infrastructure, and a high-performance Linux kernel driver supporting Unified Virtual Memory (UVM) and direct Scatter-Gather PCIe DMA.
 
 ## Cloning & Initial Setup
 
@@ -12,14 +12,27 @@ git submodule update --init --recursive
 
 ## Build & Quick Start Guide
 
-### 1. Hardware RTL Synthesis & Bitstream Generation
+### 1. LLVM Compiler Toolchain Build
+
+```bash
+cd fpga-gpu-compiler
+mkdir -p build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release
+make -j$(nproc)
+
+# Compile a sample kernel to machine code (.hex or .bin)
+cd ..
+./scripts/fpgagpu-clang -O2 examples/01_vec_add/vec_add.c -o vec_add.hex
+```
+
+### 2. Hardware RTL Synthesis & Bitstream Generation
 
 ```bash
 cd fpga-gpu-hardware
 vivado -mode batch -source build.tcl
 ```
 
-### 2. Linux Kernel Driver Build & Installation
+### 3. Linux Kernel Driver Build & Installation
 
 ```bash
 cd fpga-gpu-driver
@@ -35,7 +48,7 @@ sudo ./tests/test_ioctl
 sudo ./tests/test_interrupt
 ```
 
-### 3. RISC-V Firmware Compilation
+### 4. RISC-V Firmware Compilation
 
 ```bash
 cd fpga-gpu-firmware
