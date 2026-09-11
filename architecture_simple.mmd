@@ -1,0 +1,142 @@
+flowchart TB
+    %% =========================================================================
+    %% Resume-Grade Architectural Diagram: Full-Stack FPGA GPGPU Accelerator
+    %% Platform: Xilinx Artix-7 (XC7A200T) | ALINX AX7A200B
+    %% =========================================================================
+
+    %% Visual Styling Classes
+    classDef host fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef pcie fill:#BBDEFB,stroke:#1976D2,stroke-width:2px,color:#0D47A1
+    classDef ctrl fill:#FFF3E0,stroke:#E65100,stroke-width:2px,color:#BF360C
+    classDef sched fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef smBox fill:#F1F8E9,stroke:#388E3C,stroke-width:2px,color:#1B5E20
+    classDef pipe fill:#EDE7F6,stroke:#512DA8,stroke-width:1.5px,color:#311B92
+    classDef mem fill:#F3E5F5,stroke:#7B1FA2,stroke-width:2px,color:#4A148C
+    classDef vram fill:#E1BEE7,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef display fill:#FCE4EC,stroke:#C2185B,stroke-width:2px,color:#880E4F
+
+    %% -------------------------------------------------------------------------
+    %% 1. Host Software & Interface Layer
+    %% -------------------------------------------------------------------------
+    subgraph HOST["Host System (x86_64 Linux)"]
+        DRIVER["<b>Linux Kernel Driver (vgpu_core.ko)</b><br/>• Unified Virtual Memory (UVM) & DMA Engine<br/>• Lockless Command Ring Buffer<br/>• MSI / Legacy Interrupt Handler"]
+    end
+
+    subgraph PCIE["PCIe Gen2 x1 Host Interface (Xilinx XDMA)"]
+        direction LR
+        XDMA_CTL["<b>AXI-Lite Master (BAR0)</b><br/>Host MMIO Control Bus"]
+        XDMA_DMA["<b>AXI4 64-bit DMA Master</b><br/>Scatter-Gather High-Speed Transfer"]
+    end
+
+    %% -------------------------------------------------------------------------
+    %% 2. FPGA On-Chip SoC Subsystem
+    %% -------------------------------------------------------------------------
+    subgraph FPGA["FPGA SoC Architecture (Xilinx Artix-7 XC7A200T)"]
+
+        %% Control Plane Subsystem
+        subgraph CTRL_PLANE["Control Plane"]
+            direction TB
+            RISCV["<b>Command Processor (PicoRV32)</b><br/>• RV32IMC Baremetal Firmware @ 125MHz<br/>• Task Dispatcher & Dynamic GPC Scheduler<br/>• Hardware Doorbell & PCIe Trap IRQ"]
+            BRAM["<b>128KB Shared SRAM (BRAM)</b><br/>• Command Ring Buffer (64B Descriptors)<br/>• Mailbox & Firmware Workspace"]
+            CTRL_REGS["<b>Control & Reset Registers (AXI-Lite CSRs)</b><br/>Doorbell IRQ & CPU Soft-Reset"]
+            UART["<b>Debug UART Lite</b><br/>115200 Baud Diagnostic Console"]
+        end
+
+        %% GPGPU Compute Cluster Subsystem
+        subgraph GPC["GPGPU Compute Cluster (GPC)"]
+            direction TB
+            TBS["<b>Dynamic Thread Block Scheduler (GigaThread)</b><br/>• Available Warp-Slot Tracking & Load Balancing<br/>• Hardware FSM: Dispatch, Ack, Completion"]
+
+            subgraph SM["<b>Streaming Multiprocessor (SM) Subsystem</b>"]
+                direction TB
+
+                subgraph SM_FRONT["Warp Management & Front-End"]
+                    WARP_CTX["<b>Warp Scheduler & Context RAM</b><br/>• 8 Resident Warps (Zero-Overhead Round-Robin)<br/>• Active Warp Mask & Execution State FSM"]
+                    SIMT_STACK["<b>Hardware SIMT Stack</b><br/>• 4-Deep Divergence / Reconvergence Stack<br/>• Taken / Not-Taken Mask Splitting"]
+                    FETCH_DEC["<b>Fetch & Custom 32-bit GPU ISA Decoder</b><br/>• 4KB Kernel I-RAM (1-Cycle Latency)<br/>• R/I/J Format SIMD Instruction Decoder"]
+                end
+
+                subgraph SM_EXEC["SIMT Sub-Core Datapath (8 Lanes x 32-bit)"]
+                    VRF["<b>Vector Register File (VRF)</b><br/>• 8KB VRF (8 Warps x 8 Lanes x 32 Regs x 4B)<br/>• 32 Arch Regs x 256-bit (2R1W Vector BRAM)"]
+                    ALU["<b>SIMD Vector ALU</b><br/>• Pipelined DSP Arithmetic (ADD, SUB, MUL)<br/>• NZP Condition Flags & Predication Masking"]
+                    BRANCH["<b>Branch & Divergence Unit</b><br/>• Predicate Evaluation & Target PC Calculation"]
+                    LSU["<b>Decoupled Load/Store Unit (LSU)</b><br/>• Non-blocking Memory Request Queue<br/>• Latency-Hiding Asynchronous Execution"]
+                end
+            end
+        end
+
+        %% High-Bandwidth Memory Hierarchy Subsystem
+        subgraph MEMORY["Multi-Level Memory Hierarchy"]
+            direction TB
+            L1_CACHE["<b>SM L1 Data Cache (2KB)</b><br/>Direct-Mapped • Write-Through • Read-Allocate"]
+            L2_CACHE["<b>Shared L2 Data Cache (16KB)</b><br/>256-bit Line Buffer • Round-Robin Multi-SM Arbiter"]
+            AXI_XBAR["<b>AXI4 256-bit Crossbar Interconnect & CDC</b><br/>• High-Bandwidth AXI4-Full Path @ 125MHz<br/>• Dual-Clock Domain Converter (125MHz ↔ 100MHz)"]
+            MIG["<b>DDR3 Memory Controller (MIG 7-Series)</b><br/><b>1GB DDR3 SDRAM @ 800MT/s (32-bit Bus)</b>"]
+        end
+
+        %% Video Display Subsystem
+        subgraph DISPLAY["Display Subsystem"]
+            direction TB
+            FB_RAM["<b>True Dual-Port Framebuffer BRAM</b><br/>640x480 @ 24-bit RGB<br/>Asynchronous Dual-Clock Buffer"]
+            HDMI["<b>SiI9134 HDMI Controller</b><br/>1080P60 Video Timing & I2C Config"]
+        end
+    end
+
+    %% =========================================================================
+    %% Control Flow & Data Interconnects
+    %% =========================================================================
+    
+    %% Host to Interface
+    DRIVER ==>|PCIe Gen2 x1 Bus| PCIE
+
+    %% Control Plane Connections (AXI-Lite & MMIO)
+    XDMA_CTL -->|BAR0 MMIO Write| BRAM
+    XDMA_CTL -->|Host Doorbell IRQ| CTRL_REGS
+    CTRL_REGS -->|Interrupt Assert| RISCV
+    RISCV -->|Parse Descriptors| BRAM
+    RISCV -->|Task Launch & Grid Dims| TBS
+    RISCV -.->|Trap IRQ Request| XDMA_CTL
+    RISCV -.->|UART Telemetry| UART
+
+    %% High-Speed DMA Data Path (Host <-> DDR3)
+    XDMA_DMA ==>|64b-to-256b Width Conv| AXI_XBAR
+
+    %% GPGPU Microarchitecture Pipeline
+    TBS -->|Dispatch Block & Warps| WARP_CTX
+    WARP_CTX -->|Push/Pop Mask| SIMT_STACK
+    WARP_CTX -->|Issue Ready Warp PC| FETCH_DEC
+    FETCH_DEC -->|Decoded Opcodes & Regs| VRF
+    VRF -->|Vector Operands| ALU
+    VRF -->|Vector Operands| BRANCH
+    VRF -->|Base & Offset| LSU
+    
+    ALU -->|Write-Back Result| VRF
+    ALU -->|NZP Flags| BRANCH
+    BRANCH -->|Next PC & Divergent Mask| WARP_CTX
+    
+    LSU -->|Load Data Write-Back| VRF
+    LSU -->|Resume Warp Context| WARP_CTX
+    WARP_CTX -.->|Available Warp Slots| TBS
+
+    %% Memory Subsystem Datapath
+    LSU ==>|256-bit LSU Port| L1_CACHE
+    L1_CACHE ==>|256-bit Line Miss / Write| L2_CACHE
+    L2_CACHE ==>|256-bit AXI4-Full Master| AXI_XBAR
+    AXI_XBAR ==>|AXI4-Full 256-bit @ 100MHz| MIG
+
+    %% Display Engine Datapath
+    AXI_XBAR -.->|Rendered Frame Buffer| FB_RAM
+    FB_RAM ==>|24-bit RGB Stream| HDMI
+
+    %% =========================================================================
+    %% Node Styling Associations
+    %% =========================================================================
+    class DRIVER host
+    class XDMA_CTL,XDMA_DMA pcie
+    class RISCV,BRAM,CTRL_REGS,UART ctrl
+    class TBS sched
+    class SM smBox
+    class WARP_CTX,SIMT_STACK,FETCH_DEC,VRF,ALU,BRANCH,LSU pipe
+    class L1_CACHE,L2_CACHE,AXI_XBAR mem
+    class MIG vram
+    class FB_RAM,HDMI display
