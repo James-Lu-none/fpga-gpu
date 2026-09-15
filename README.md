@@ -46,7 +46,7 @@ sudo lspci -d 10ee:7021 -vvv
 sudo dmesg | tail -n 20
 
 sudo ./tests/test_dma
-sudo ./tests/compute
+sudo ./tests/test_compute
 ```
 
 ### 4. RISC-V Firmware Compilation
