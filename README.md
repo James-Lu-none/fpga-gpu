@@ -39,13 +39,14 @@ cd fpga-gpu-driver
 make clean
 make
 
-sudo insmod driver/vgpu_core.ko queue_mode=1
+sudo rmmod driver/vgpu_driver.ko
+sudo insmod driver/vgpu_driver.ko queue_mode=0
 
-lspci -d 10ee:7021 -vvv
-dmesg | tail -n 20
+sudo lspci -d 10ee:7021 -vvv
+sudo dmesg | tail -n 20
 
-sudo ./tests/test_ioctl
-sudo ./tests/test_interrupt
+sudo ./tests/test_dma
+sudo ./tests/compute
 ```
 
 ### 4. RISC-V Firmware Compilation
@@ -54,4 +55,5 @@ sudo ./tests/test_interrupt
 cd fpga-gpu-firmware
 make clean
 make
+sudo ./load_fw
 ```
