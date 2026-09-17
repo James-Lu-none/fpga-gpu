@@ -79,18 +79,18 @@ PCIE_INFO=$(lspci -d 10ee:7021)
 print_success "Found PCIe Device: ${PCIE_INFO}"
 
 # 3. Build & Reload Kernel Module (KMD)
-print_step "Compiling and Reloading vGPU Kernel Driver (vgpu_driver.ko)..."
-if lsmod | grep -q "^vgpu_driver"; then
-    echo "Unloading existing vgpu_driver module..."
-    rmmod vgpu_driver || {
-        print_error "Failed to unload vgpu_driver. Ensure no processes have /dev/fpgagpu0 open."
+print_step "Compiling and Reloading fpgagpu Kernel Driver (fpgagpu_driver.ko)..."
+if lsmod | grep -q "^fpgagpu_driver"; then
+    echo "Unloading existing fpgagpu_driver module..."
+    rmmod fpgagpu_driver || {
+        print_error "Failed to unload fpgagpu_driver. Ensure no processes have /dev/fpgagpu0 open."
         exit 1
     }
 fi
 
 make -C "${SCRIPT_DIR}/fpga-gpu-driver/driver" clean > /dev/null 2>&1 || true
 make -C "${SCRIPT_DIR}/fpga-gpu-driver/driver" -j"$(nproc)"
-insmod "${SCRIPT_DIR}/fpga-gpu-driver/driver/vgpu_driver.ko"
+insmod "${SCRIPT_DIR}/fpga-gpu-driver/driver/fpgagpu_driver.ko"
 print_success "Kernel module loaded successfully."
 
 # 4. Load Baremetal RISC-V Firmware into BRAM

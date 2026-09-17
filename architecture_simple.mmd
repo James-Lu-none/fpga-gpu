@@ -19,7 +19,7 @@ flowchart TB
     %% 1. Host Software & Interface Layer
     %% -------------------------------------------------------------------------
     subgraph HOST["Host System (x86_64 Linux)"]
-        DRIVER["<b>Linux Kernel Driver (vgpu_core.ko)</b><br/>• Unified Virtual Memory (UVM) & DMA Engine<br/>• Lockless Command Ring Buffer<br/>• MSI / Legacy Interrupt Handler"]
+        DRIVER["<b>Linux Kernel Driver (fpgagpu_core.ko)</b><br/>• Unified Virtual Memory (UVM) & DMA Engine<br/>• Lockless Command Ring Buffer<br/>• MSI / Legacy Interrupt Handler"]
     end
 
     subgraph PCIE["PCIe Gen2 x1 Host Interface (Xilinx XDMA)"]

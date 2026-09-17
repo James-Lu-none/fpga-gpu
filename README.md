@@ -39,8 +39,8 @@ cd fpga-gpu-driver
 make clean
 make
 
-sudo rmmod driver/vgpu_driver.ko
-sudo insmod driver/vgpu_driver.ko queue_mode=0
+sudo rmmod driver/fpgagpu_driver.ko
+sudo insmod driver/fpgagpu_driver.ko queue_mode=0
 
 sudo lspci -d 10ee:7021 -vvv
 sudo dmesg | tail -n 20
