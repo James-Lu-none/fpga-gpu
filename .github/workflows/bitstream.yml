@@ -46,6 +46,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.validate.outputs.source_sha }}
+          submodules: recursive
       # GitHub artifact storage disabled temporarily; original step retained.
       # - uses: actions/download-artifact@v4
       #   with:

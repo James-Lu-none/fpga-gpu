@@ -31,7 +31,9 @@ cd ..
 
 ```bash
 cd fpga-gpu-hardware
-vivado -mode batch -source build.tcl
+vivado -mode batch -source implement.tcl
+# Optional: generate bitstream from routed checkpoint
+vivado -mode batch -source write_bitstream.tcl
 ```
 
 ### 3. Linux Kernel Driver Build & Installation

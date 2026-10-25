@@ -20,7 +20,7 @@ collect_logs() {
         mkdir -p "$CI_OUTPUT_DIR/run-logs"
         while IFS= read -r -d '' file; do
             cp --parents "$file" "$CI_OUTPUT_DIR/run-logs/" || true
-        done < <(find fpga-gpu-hardware -path '*.runs/*' -type f \
+        done < <(find fpga-gpu-hardware "$CI_OUTPUT_DIR/project" -path '*.runs/*' -type f \
             \( -name '*.log' -o -name '*.rpt' \) -print0)
     fi
     exit "$rc"
@@ -36,7 +36,11 @@ else
     cmp "$CI_OUTPUT_DIR/vivado-version.txt" "$CI_OUTPUT_DIR/current-vivado-version.txt"
     (cd "$CI_OUTPUT_DIR" && sha256sum -c checkpoint.sha256)
 fi
-vivado -mode batch -notrace -source "ci/$mode.tcl" \
+case "$mode" in
+    implementation) tcl_script=implement.tcl ;;
+    bitstream) tcl_script=write_bitstream.tcl ;;
+esac
+vivado -mode batch -notrace -source "fpga-gpu-hardware/$tcl_script" \
     -log "$CI_OUTPUT_DIR/$mode.log" -journal "$CI_OUTPUT_DIR/$mode.jou"
 if [[ $mode == implementation ]]; then
     (cd "$CI_OUTPUT_DIR" && sha256sum routed.dcp > checkpoint.sha256)
