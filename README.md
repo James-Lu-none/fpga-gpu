@@ -4,6 +4,8 @@ FPGA-GPU is an open-source, full-stack GPGPU accelerator designed for the Xilinx
 
 ## Cloning & Initial Setup
 
+CI implementation、手動 bitstream 產生方式與 AI triage / HIL 後續規劃見 [CI Pipeline](docs/ci/README.md)。
+
 ```bash
 git clone --recurse-submodules https://github.com/James-Lu-none/fpga-gpu.git
 cd fpga-gpu

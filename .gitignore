@@ -1,4 +1,5 @@
 # Build and temporary files
+/artifacts/
 *.log
 *.jou
 *.str

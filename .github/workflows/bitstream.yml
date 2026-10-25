@@ -1,0 +1,63 @@
+name: Generate FPGA Bitstream
+run-name: Bitstream from CI run ${{ inputs.ci_run_id }}
+on:
+  workflow_dispatch:
+    inputs:
+      ci_run_id:
+        description: Successful FPGA-GPU CI run ID (implementation artifact retained)
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+jobs:
+  validate:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: [self-hosted, Linux, X64, vivado]
+    outputs:
+      source_sha: ${{ steps.source.outputs.sha }}
+    steps:
+      - uses: actions/github-script@v7
+        id: source
+        env:
+          CI_RUN_ID: ${{ inputs.ci_run_id }}
+        with:
+          script: |
+            const id = process.env.CI_RUN_ID;
+            if (!/^[1-9][0-9]*$/.test(id)) throw new Error('CI run ID must be a positive integer');
+            const {data: run} = await github.rest.actions.getWorkflowRun({...context.repo, run_id: id});
+            const {data: repo} = await github.rest.repos.get(context.repo);
+            if (run.path !== '.github/workflows/ci.yml' || run.conclusion !== 'success' ||
+                run.head_branch !== repo.default_branch || !['push', 'workflow_dispatch'].includes(run.event) ||
+                run.head_repository?.full_name !== repo.full_name) {
+              throw new Error('Expected a successful default-branch CI run from this repository');
+            }
+            core.setOutput('sha', run.head_sha);
+  bitstream:
+    needs: validate
+    runs-on: [self-hosted, Linux, X64, vivado]
+    timeout-minutes: 45
+    concurrency:
+      group: vivado-tool
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.source_sha }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: vivado-implementation
+          path: artifacts/vivado
+          run-id: ${{ inputs.ci_run_id }}
+          github-token: ${{ github.token }}
+      - name: Generate bitstream from verified checkpoint
+        env:
+          VIVADO_SETTINGS: /opt/Xilinx/2026.1/Vivado/settings64.sh
+        run: bash ci/vivado.sh bitstream
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fpga-bitstream-${{ inputs.ci_run_id }}
+          path: artifacts/vivado/
+          retention-days: 14
+          if-no-files-found: error
