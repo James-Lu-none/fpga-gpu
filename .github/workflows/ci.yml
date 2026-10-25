@@ -29,12 +29,16 @@ jobs:
             --env HOME=/tmp --env CTEST_OUTPUT_ON_FAILURE=1 \
             --mount "type=bind,source=$GITHUB_WORKSPACE,target=/workspace" \
             --workdir /workspace fpgagpu-ci:local bash ci/software.sh
-      - uses: actions/upload-artifact@v4
+      # GitHub artifact storage disabled temporarily; original step retained.
+      # - uses: actions/upload-artifact@v4
+      #   if: always()
+      #   with:
+      #     name: software-evidence
+      #     path: artifacts/software/
+      #     retention-days: 14
+      - name: Preserve software on runner
         if: always()
-        with:
-          name: software-evidence
-          path: artifacts/software/
-          retention-days: 14
+        run: bash ci/local-artifacts.sh save software
   implementation:
     needs: build-sim
     # Persistent self-hosted runner only executes the repository's default branch.
@@ -53,10 +57,14 @@ jobs:
           VIVADO_SETTINGS: /opt/Xilinx/2026.1/Vivado/settings64.sh
           VIVADO_JOBS: '4'
         run: bash ci/vivado.sh implementation
-      - uses: actions/upload-artifact@v4
+      # GitHub artifact storage disabled temporarily; original step retained.
+      # - uses: actions/upload-artifact@v4
+      #   if: always()
+      #   with:
+      #     name: vivado-implementation
+      #     path: artifacts/vivado/
+      #     retention-days: 14
+      #     if-no-files-found: error
+      - name: Preserve vivado on runner
         if: always()
-        with:
-          name: vivado-implementation
-          path: artifacts/vivado/
-          retention-days: 14
-          if-no-files-found: error
+        run: bash ci/local-artifacts.sh save vivado
