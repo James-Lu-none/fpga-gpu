@@ -10,6 +10,7 @@ if [[ -n $VIVADO_SETTINGS ]]; then
     source "$VIVADO_SETTINGS"
     set -u
 fi
+export XILINXD_LICENSE_FILE="${XILINXD_LICENSE_FILE:-/opt/Xilinx/Xilinx.lic}"
 command -v vivado >/dev/null || { echo 'ERROR: Vivado is unavailable; check VIVADO_SETTINGS and the installation.' >&2; exit 1; }
 export CI_OUTPUT_DIR="$PWD/artifacts/vivado"
 mkdir -p "$CI_OUTPUT_DIR"
