@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Persist outside actions-runner/_work, which checkout may clean.
 set -euo pipefail
-mode=${1:?Usage: local-artifacts.sh save|restore software|vivado}
+mode=${1:?Usage: local-artifacts.sh save|restore software|vivado|bitstream}
 kind=${2:?Missing artifact kind}
-[[ $kind == software || $kind == vivado ]] || exit 2
+[[ $kind == software || $kind == vivado || $kind == bitstream ]] || exit 2
 root=${LOCAL_ARTIFACT_ROOT:-/home/github-runner/ci-artifacts}
 repo=${GITHUB_REPOSITORY:?Missing GITHUB_REPOSITORY}
 [[ $repo =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ && $repo != *..* ]] || exit 2
