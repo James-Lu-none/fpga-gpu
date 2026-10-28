@@ -55,7 +55,6 @@ jobs:
       - name: Run implementation and quality gates
         env:
           VIVADO_SETTINGS: /opt/Xilinx/2026.1/Vivado/settings64.sh
-          VIVADO_JOBS: '4'
         run: bash ci/vivado.sh implementation
       # GitHub artifact storage disabled temporarily; original step retained.
       # - uses: actions/upload-artifact@v4
