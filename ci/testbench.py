@@ -12,7 +12,6 @@ import select
 import shlex
 import shutil
 import subprocess
-import sys
 import termios
 import time
 
@@ -231,39 +230,11 @@ def program_command(lab, action, bundle, logs, mode):
             '-tclargs', action, str(bundle / 'top.bin'), mode]
 
 
-def uart_main(args):
-    """Run on DUT B; SSH stdin EOF stops capture, with a hard lifetime limit."""
-    fd = os.open(args.device, os.O_RDONLY | os.O_NOCTTY | os.O_NONBLOCK)
-    try:
-        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        attrs = termios.tcgetattr(fd)
-        attrs[0] = attrs[1] = attrs[3] = 0
-        attrs[2] = termios.CS8 | termios.CREAD | termios.CLOCAL
-        attrs[4] = attrs[5] = termios.B115200
-        attrs[6][termios.VMIN] = attrs[6][termios.VTIME] = 0
-        termios.tcsetattr(fd, termios.TCSANOW, attrs)
-        print('UART capture ready: 115200 baud, 8N1', flush=True)
-        deadline = time.monotonic() + 900
-        while time.monotonic() < deadline:
-            ready, _, _ = select.select([fd, sys.stdin.buffer], [], [], 1)
-            if sys.stdin.buffer in ready and not os.read(0, 1):
-                return
-            if fd in ready:
-                chunk = os.read(fd, 4096)
-                if not chunk:
-                    raise RuntimeError('FPGA UART disconnected')
-                sys.stdout.buffer.write(chunk)
-                sys.stdout.buffer.flush()
-        raise TimeoutError('UART capture exceeded 900 seconds')
-    finally:
-        os.close(fd)
-
-
 @contextmanager
 def capture_uart(ssh, logs):
-    # Send the existing CLI as code; no extra script installation on DUT B.
-    source = "__file__ = 'testbench.py'\n" + Path(__file__).read_text()
-    remote = 'python3 -u -c ' + shlex.quote(source) + ' uart'
+    # Send only DUT operations; no script installation on B is needed.
+    source = (HERE / 'dut.py').read_text()
+    remote = 'sudo -n python3 -u -c ' + shlex.quote(source) + ' uart'
     with (logs / 'uart.log').open('wb') as output:
         process = subprocess.Popen(ssh + [remote], stdin=subprocess.PIPE,
                                    stdout=output, stderr=subprocess.STDOUT)
@@ -271,7 +242,8 @@ def capture_uart(ssh, logs):
             deadline = time.monotonic() + 20
             while b'UART capture ready:' not in (logs / 'uart.log').read_bytes():
                 if process.poll() is not None or time.monotonic() >= deadline:
-                    raise RuntimeError('DUT UART capture failed to start; inspect uart.log')
+                    details = (logs / 'uart.log').read_text(errors='replace')[-4096:]
+                    raise RuntimeError(f'DUT UART capture failed to start:\n{details}')
                 time.sleep(0.1)
             log('Capturing DUT B /dev/ttyUSB0 at 115200 baud to uart.log')
             yield
@@ -293,19 +265,19 @@ def load_main(args):
     logs = Path('artifacts/testbench').resolve()
     logs.mkdir(parents=True, exist_ok=True)
     ssh = ssh_command()[:-1]
-    pci_helper = (HERE / 'dut-pci.py').read_text()
+    dut_source = (HERE / 'dut.py').read_text()
     # Power-on is a separate job. Check state without turning the DUT on here.
     controller = Arduino(os.environ.get('ARDUINO_DEVICE', '/dev/ttyACM0'))
     try:
         set_power(controller, 'check')
         wait_ssh(ssh_command())
         run_logged(program_command(lab, 'detect', bundle, logs, args.program_mode), 90)
-        run_logged(ssh + ['sudo -n python3 - prepare'], 30, input_text=pci_helper)
         with capture_uart(ssh, logs):
+            run_logged(ssh + ['sudo -n python3 - prepare'], 30, input_text=dut_source)
             run_logged(program_command(lab, 'program', bundle, logs, args.program_mode),
                        600 if args.program_mode == 'flash' else 180)
             time.sleep(3)
-            run_logged(ssh + ['sudo -n python3 - rescan'], 45, input_text=pci_helper)
+            run_logged(ssh + ['sudo -n python3 - rescan'], 45, input_text=dut_source)
         log(f'PASS: {args.program_mode} programming and FPGA PCIe enumeration')
     finally:
         controller.close()
@@ -317,8 +289,6 @@ def main():
     smoke = commands.add_parser('smoke', help='Check power and SSH readiness')
     smoke.add_argument('--power-action', choices=['check', 'on', 'off'], default='on')
     commands.add_parser('shutdown', help='OS shutdown with Arduino forced-off fallback')
-    uart = commands.add_parser('uart', help='Capture UART on DUT B until stdin closes')
-    uart.add_argument('--device', default='/dev/ttyUSB0')
     bundle = commands.add_parser('verify-bundle', help='Verify local producer bundle')
     bundle.add_argument('directory', type=Path)
     bundle.add_argument('--source-sha', required=True)
@@ -333,8 +303,6 @@ def main():
         smoke_main(args)
     elif args.command == 'shutdown':
         shutdown_main()
-    elif args.command == 'uart':
-        uart_main(args)
     elif args.command == 'verify-bundle':
         verify(args.directory, args.source_sha)
     else:
