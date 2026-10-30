@@ -2,6 +2,12 @@ name: FPGA-GPU CI
 on:
   push:
   workflow_dispatch:
+    inputs:
+      program_mode:
+        description: 'FPGA target: SRAM or persistent configuration Flash'
+        type: choice
+        options: [sram, flash]
+        default: sram
 permissions:
   contents: read
 jobs:
@@ -29,13 +35,13 @@ jobs:
             --env HOME=/tmp --env CTEST_OUTPUT_ON_FAILURE=1 \
             --mount "type=bind,source=$GITHUB_WORKSPACE,target=/workspace" \
             --workdir /workspace fpgagpu-ci:local bash ci/software.sh
-      # GitHub artifact storage disabled temporarily; original step retained.
+      # Reports and diagnostics are retained locally only.
       # - uses: actions/upload-artifact@v4
       #   if: always()
       #   with:
-      #     name: software-evidence
+      #     name: software-evidence-${{ github.run_attempt }}
       #     path: artifacts/software/
-      #     retention-days: 14
+      #     retention-days: 7
       - name: Preserve software on runner
         if: always()
         run: bash ci/local-artifacts.sh save software
@@ -61,18 +67,28 @@ jobs:
         env:
           VIVADO_SETTINGS: /opt/Xilinx/2026.1/Vivado/settings64.sh
         run: bash ci/vivado.sh implementation
-      # GitHub artifact storage disabled temporarily; original step retained.
+      # Reports and diagnostics are retained locally only.
       # - uses: actions/upload-artifact@v4
       #   if: always()
       #   with:
-      #     name: vivado-implementation
-      #     path: artifacts/vivado/
-      #     retention-days: 14
-      #     if-no-files-found: error
+      #     name: vivado-implementation-${{ github.run_attempt }}
+      #     path: |
+      #       artifacts/vivado/*.rpt
+      #       artifacts/vivado/*.log
+      #       artifacts/vivado/*.jou
+      #       artifacts/vivado/*.txt
+      #       artifacts/vivado/*.sha256
+      #       artifacts/vivado/routed.dcp
+      #       artifacts/vivado/modules/
+      #       artifacts/vivado/run-logs/
+      #     retention-days: 7
       - name: Preserve vivado on runner
         if: always()
         run: bash ci/local-artifacts.sh save vivado
   bitstream:
+    outputs:
+      artifact_id: ${{ steps.published.outputs.artifact-id }}
+      bin_sha256: ${{ steps.digest.outputs.bin_sha256 }}
     needs: implementation
     runs-on: [self-hosted, Linux, X64, vivado]
     timeout-minutes: 45
@@ -100,3 +116,52 @@ jobs:
             find artifacts/vivado -maxdepth 1 -type f \( -name 'top.bit' -o -name 'top.bin' -o -name 'bitstream*' -o -name '*version.txt' -o -name 'source-sha.txt' -o -name 'submodules.txt' -o -name 'checkpoint.sha256' \) -exec cp {} artifacts/bitstream/ \;
           fi
           bash ci/local-artifacts.sh save bitstream
+      - name: Verify bitstream bundle for transfer
+        run: python3 ci/testbench.py verify-bundle artifacts/bitstream --source-sha "$GITHUB_SHA"
+      - name: Record binary checksum for downstream validation
+        id: digest
+        run: |
+          digest=$(sha256sum artifacts/bitstream/top.bin)
+          echo "bin_sha256=${digest%% *}" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        id: published
+        with:
+          name: fpga-bitstream-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/bitstream/top.bin
+          retention-days: 7
+          if-no-files-found: error
+  load-bitstream:
+    needs: bitstream
+    runs-on: [self-hosted, testbench]
+    timeout-minutes: 20
+    concurrency:
+      group: fpga-testbench
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.bitstream.outputs.artifact_id }}
+          path: artifacts/bitstream
+          merge-multiple: true
+      - name: Verify, power on, program FPGA and check PCIe
+        env:
+          VIVADO_LAB_SETTINGS: /opt/Xilinx/2026.1/Vivado_Lab/settings64.sh
+          FPGA_PROGRAM_MODE: ${{ inputs.program_mode || 'sram' }}
+          EXPECTED_BIN_SHA256: ${{ needs.bitstream.outputs.bin_sha256 }}
+        run: |
+          mkdir -p artifacts/testbench
+          set -o pipefail
+          bash ci/load-bitstream.sh artifacts/bitstream --source-sha "$GITHUB_SHA" --bin-sha256 "$EXPECTED_BIN_SHA256" --program-mode "$FPGA_PROGRAM_MODE" 2>&1 | tee artifacts/testbench/loading.log
+      - name: Preserve loading diagnostics locally
+        if: always()
+        run: bash ci/local-artifacts.sh save testbench
+      # Reports and diagnostics are retained locally only.
+      # - uses: actions/upload-artifact@v4
+      #   if: always()
+      #   with:
+      #     name: testbench-loading-${{ github.run_id }}-${{ github.run_attempt }}
+      #     path: artifacts/testbench/
+      #     retention-days: 7
