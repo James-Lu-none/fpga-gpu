@@ -161,6 +161,32 @@ def verify(directory, expected_sha):
     print(f'PASS: bitstream checksums and source commit {source}')
 
 
+def shutdown_main():
+    controller = Arduino(os.environ.get('ARDUINO_DEVICE', '/dev/ttyACM0'))
+    try:
+        if controller.request('S', {'STATUS:ON', 'STATUS:OFF'}) == 'STATUS:OFF':
+            log('PASS: DUT power is already OFF')
+            return
+        try:
+            command = ssh_command()[:-1] + ['sudo -n shutdown -h now']
+            # SSH can disconnect as the OS shuts down; power feedback is decisive.
+            result = subprocess.run(command, timeout=15, check=False)
+            log(f'Shutdown request SSH exit code: {result.returncode}')
+        except (RuntimeError, OSError, subprocess.TimeoutExpired) as exc:
+            log(f'Graceful shutdown request failed: {exc}')
+        deadline = time.monotonic() + 60
+        while time.monotonic() < deadline:
+            if controller.request('S', {'STATUS:ON', 'STATUS:OFF'}) == 'STATUS:OFF':
+                log('PASS: DUT power is OFF after OS shutdown')
+                return
+            time.sleep(2)
+        log('OS shutdown deadline expired; forcing power OFF via Arduino K')
+        set_power(controller, 'off')
+        log('PASS: DUT power is OFF after forced shutdown')
+    finally:
+        controller.close()
+
+
 def verify_binary(directory, expected_sha, expected_digest):
     """Validate bin-only transfer against same-run producer job outputs."""
     if not re.fullmatch(r'[0-9a-fA-F]{40}', expected_sha):
@@ -268,11 +294,10 @@ def load_main(args):
     logs.mkdir(parents=True, exist_ok=True)
     ssh = ssh_command()[:-1]
     pci_helper = (HERE / 'dut-pci.py').read_text()
-    # Workflow concurrency also serializes the connectivity test. Keep Arduino
-    # connection/lock open throughout loading; no forced shutdown on failure.
+    # Power-on is a separate job. Check state without turning the DUT on here.
     controller = Arduino(os.environ.get('ARDUINO_DEVICE', '/dev/ttyACM0'))
     try:
-        set_power(controller, 'on')
+        set_power(controller, 'check')
         wait_ssh(ssh_command())
         run_logged(program_command(lab, 'detect', bundle, logs, args.program_mode), 90)
         run_logged(ssh + ['sudo -n python3 - prepare'], 30, input_text=pci_helper)
@@ -291,6 +316,7 @@ def main():
     commands = parser.add_subparsers(dest='command', required=True)
     smoke = commands.add_parser('smoke', help='Check power and SSH readiness')
     smoke.add_argument('--power-action', choices=['check', 'on', 'off'], default='on')
+    commands.add_parser('shutdown', help='OS shutdown with Arduino forced-off fallback')
     uart = commands.add_parser('uart', help='Capture UART on DUT B until stdin closes')
     uart.add_argument('--device', default='/dev/ttyUSB0')
     bundle = commands.add_parser('verify-bundle', help='Verify local producer bundle')
@@ -305,6 +331,8 @@ def main():
     args = parser.parse_args()
     if args.command == 'smoke':
         smoke_main(args)
+    elif args.command == 'shutdown':
+        shutdown_main()
     elif args.command == 'uart':
         uart_main(args)
     elif args.command == 'verify-bundle':

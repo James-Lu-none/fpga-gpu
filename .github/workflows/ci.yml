@@ -10,6 +10,10 @@ on:
         default: sram
 permissions:
   contents: read
+# Hold the DUT reservation across power-on, loading and power-off jobs.
+concurrency:
+  group: fpga-testbench
+  cancel-in-progress: false
 jobs:
   build-sim:
     if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
@@ -130,13 +134,24 @@ jobs:
           path: artifacts/bitstream/top.bin
           retention-days: 7
           if-no-files-found: error
-  load-bitstream:
+  power-on:
     needs: bitstream
     runs-on: [self-hosted, testbench]
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Power on DUT B and wait for SSH
+        run: |
+          mkdir -p artifacts/power-on
+          set -o pipefail
+          python3 -u ci/testbench.py smoke --power-action on 2>&1 | tee artifacts/power-on/power.log
+      - name: Preserve power-on diagnostics locally
+        if: always()
+        run: bash ci/local-artifacts.sh save power-on
+  load-bitstream:
+    needs: [bitstream, power-on]
+    runs-on: [self-hosted, testbench]
     timeout-minutes: 20
-    concurrency:
-      group: fpga-testbench
-      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
         with:
@@ -146,7 +161,7 @@ jobs:
           artifact-ids: ${{ needs.bitstream.outputs.artifact_id }}
           path: artifacts/bitstream
           merge-multiple: true
-      - name: Verify, power on, program FPGA and check PCIe
+      - name: Verify, program FPGA and check PCIe
         env:
           VIVADO_LAB_SETTINGS: /opt/Xilinx/2026.1/Vivado_Lab/settings64.sh
           FPGA_PROGRAM_MODE: ${{ inputs.program_mode || 'sram' }}
@@ -165,3 +180,18 @@ jobs:
       #     name: testbench-loading-${{ github.run_id }}-${{ github.run_attempt }}
       #     path: artifacts/testbench/
       #     retention-days: 7
+  power-off:
+    needs: [power-on, load-bitstream]
+    if: ${{ always() && needs.power-on.result != 'skipped' }}
+    runs-on: [self-hosted, testbench]
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shut down DUT B and verify power is OFF
+        run: |
+          mkdir -p artifacts/power-off
+          set -o pipefail
+          python3 -u ci/testbench.py shutdown 2>&1 | tee artifacts/power-off/power.log
+      - name: Preserve power-off diagnostics locally
+        if: always()
+        run: bash ci/local-artifacts.sh save power-off
