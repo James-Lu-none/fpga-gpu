@@ -12,6 +12,7 @@ import select
 import shlex
 import shutil
 import subprocess
+import tarfile
 import termios
 import time
 
@@ -283,12 +284,50 @@ def load_main(args):
         controller.close()
 
 
+def hardware_test_main():
+    logs = Path('artifacts/hardware-test').resolve()
+    logs.mkdir(parents=True, exist_ok=True)
+    ssh = ssh_command()[:-1]
+    wait_ssh(ssh_command())
+    # Transfer tracked sources from this checkout, including pinned submodules.
+    repo = HERE.parent
+    archive = logs / 'sources.tar.gz'
+    with tarfile.open(archive, 'w:gz') as bundle:
+        for component in ('fpga-gpu-driver', 'fpga-gpu-firmware', 'fpga-gpu-compiler'):
+            tracked = subprocess.check_output(['git', '-C', str(repo / component), 'ls-files', '-z'])
+            commit = subprocess.check_output(['git', '-C', str(repo / component), 'rev-parse', 'HEAD'], text=True)
+            (logs / f'{component}-sha.txt').write_text(commit)
+            for name in tracked.decode().split('\0'):
+                if name:
+                    path = Path(component) / name
+                    bundle.add(repo / path, arcname=str(path), recursive=False)
+    remote = subprocess.check_output(ssh + ['mktemp -d /tmp/fpgagpu-ci.XXXXXXXXXX'], text=True, timeout=20).strip()
+    if not re.fullmatch(r'/tmp/fpgagpu-ci\.[A-Za-z0-9]+', remote):
+        raise RuntimeError(f'Unexpected remote workspace: {remote!r}')
+    (logs / 'dut-workspace.txt').write_text(remote + '\n')
+    with archive.open('rb') as source:
+        subprocess.run(ssh + [f'tar -xzf - -C {shlex.quote(remote)}'], stdin=source, check=True, timeout=120)
+    try:
+        with capture_uart(ssh, logs):
+            run_logged(ssh + [f'sudo -n python3 - test --workspace {shlex.quote(remote)}'],
+                       1800, input_text=(HERE / 'dut.py').read_text())
+    finally:
+        # Preserve remote logs even when a test or module load fails.
+        with (logs / 'dut-results.tar.gz').open('wb') as output:
+            result = subprocess.run(ssh + [f'sudo -n tar -czf - -C {shlex.quote(remote)} results'],
+                                    stdout=output, timeout=30)
+        if result.returncode:
+            log(f'WARNING: DUT results collection failed; remote workspace: {remote}')
+        # The workspace remains on B for inspection until its /tmp is cleaned.
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='command', required=True)
     smoke = commands.add_parser('smoke', help='Check power and SSH readiness')
     smoke.add_argument('--power-action', choices=['check', 'on', 'off'], default='on')
     commands.add_parser('shutdown', help='OS shutdown with Arduino forced-off fallback')
+    commands.add_parser('hardware-test', help='Build and test driver/firmware on DUT B')
     bundle = commands.add_parser('verify-bundle', help='Verify local producer bundle')
     bundle.add_argument('directory', type=Path)
     bundle.add_argument('--source-sha', required=True)
@@ -303,6 +342,8 @@ def main():
         smoke_main(args)
     elif args.command == 'shutdown':
         shutdown_main()
+    elif args.command == 'hardware-test':
+        hardware_test_main()
     elif args.command == 'verify-bundle':
         verify(args.directory, args.source_sha)
     else:
