@@ -1,5 +1,7 @@
 # Build and temporary files
 /artifacts/
+/results/
+__pycache__/
 *.log
 *.jou
 *.str

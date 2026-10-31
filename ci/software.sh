@@ -15,6 +15,7 @@ collect() {
     exit "$rc"
 }
 trap collect EXIT
+make -C fpga-gpu-driver/tests check-csr
 verilator --version > artifacts/software/verilator-version.txt
 clang-18 --version > artifacts/software/clang-version.txt
 dpkg-query -W > artifacts/software/packages.txt
