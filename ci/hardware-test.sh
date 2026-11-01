@@ -75,6 +75,13 @@ done
 }
 cd "$driver/tests"
 minimal_failed=0
+for mode in store copy register; do
+    if run "isa-$mode" 120 ./test_isa_memory "$mode"; then
+        :
+    else
+        minimal_failed=1
+    fi
+done
 for mode in constant scalar copy thread-id; do
     if run "minimal-$mode" 120 ./test_opencl_minimal "$mode"; then
         :
