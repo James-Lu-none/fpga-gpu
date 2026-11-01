@@ -51,9 +51,9 @@ sudo apt-get install build-essential cmake clang-18 llvm-18-dev zlib1g-dev libzs
 - Local logs: `/home/github-runner/ci-artifacts/OWNER/REPO/RUN/ATTEMPT/KIND`.
 - Hardware test logs include UART, step logs and `dut-results.tar.gz`.
 - Cold-boot logs are retained under the `cold-boot` artifact directory.
-- B first runs direct ISA store/copy/register tests, then the four OpenCL minimal cases and larger tests.
-- Direct ISA logs are named `isa-store`, `isa-copy` and `isa-register`.
+- B first runs direct ISA store/copy/register/rs1-add tests, then the four OpenCL minimal cases and larger tests.
+- Direct ISA logs are named `isa-store`, `isa-copy`, `isa-register` and `isa-rs1-add`.
 - Minimal test logs are named `minimal-constant`, `minimal-scalar`, `minimal-copy` and `minimal-thread-id`.
-- All seven minimal cases report results; any failure skips larger tests. Cleanup collects logs and unloads the module.
+- All eight minimal cases report results; any failure skips larger tests. Cleanup collects logs and unloads the module.
 - Power-off runs after success or failure: SSH shutdown, then Arduino K after 60 seconds if needed.
 - Runner/Arduino must remain available for power-off. B workspaces remain for inspection.

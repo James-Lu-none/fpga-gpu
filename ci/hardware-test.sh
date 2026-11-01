@@ -75,7 +75,7 @@ done
 }
 cd "$driver/tests"
 minimal_failed=0
-for mode in store copy register; do
+for mode in store copy register rs1-add; do
     if run "isa-$mode" 120 ./test_isa_memory "$mode"; then
         :
     else
