@@ -74,6 +74,15 @@ done
     echo 'ERROR: Driver did not bind/create /dev/fpgagpu0.'; exit 1;
 }
 cd "$driver/tests"
+minimal_failed=0
+for mode in constant scalar copy thread-id; do
+    if run "minimal-$mode" 120 ./test_opencl_minimal "$mode"; then
+        :
+    else
+        minimal_failed=1
+    fi
+done
+(( minimal_failed == 0 )) || exit 1
 tests=(test_dma test_opencl_buffer_copy test_opencl_vector_add test_opencl_matmul \
        test_opencl_matmul_occupancy test_opencl_branch_divergence)
 for test in "${tests[@]}"; do
