@@ -11,7 +11,6 @@ compiler="$root/fpga-gpu-compiler"
 jobs=$(nproc)
 kdir="/lib/modules/$(uname -r)/build"
 loaded=0
-csr_built=0
 resource=
 export FPGAGPU_COMPILER_DIR="$compiler" LD_LIBRARY_PATH="$driver/umd"
 
@@ -29,18 +28,10 @@ run() {
     fi
 }
 
-debug() {
-    local label=$1
-    shift
-    timeout --kill-after=5 15 "$driver/tests/test_csr" "$resource" \
-        --label "$label" --json "$logs/debug-$label.json" "$@"
-}
-
 finish() {
     local rc=$? unload_rc=0
     trap - EXIT
     set +e
-    if (( csr_built )); then debug final; fi
     timeout --kill-after=5 15 dmesg --color=never > "$logs/dmesg-after.log" 2>&1
     find "$driver/tests" -maxdepth 1 -type f \( -name '*_cpu.bin' -o -name '*_gpu.bin' \) -exec cp {} "$logs/" \;
     if (( loaded )); then
@@ -66,9 +57,6 @@ done
 [[ ! -d /sys/module/fpgagpu_driver ]] || { echo 'ERROR: fpgagpu_driver is already loaded.'; exit 1; }
 resource=$(python3 "$root/ci/dut.py" device)
 run dmesg-before 15 dmesg --color=never
-run csr-tool-build 60 make -C "$driver/tests" test_csr
-csr_built=1
-debug before-firmware --require-ready
 run compiler-configure 300 cmake -S "$compiler" -B "$compiler/build" \
     -DCMAKE_BUILD_TYPE=Release -DLLVM_DIR=/usr/lib/llvm-18/lib/cmake/llvm -DBUILD_TESTING=OFF
 run compiler-build 600 cmake --build "$compiler/build" --parallel "$jobs"
@@ -89,12 +77,6 @@ cd "$driver/tests"
 tests=(test_dma test_opencl_buffer_copy test_opencl_vector_add test_opencl_matmul \
        test_opencl_matmul_occupancy test_opencl_branch_divergence)
 for test in "${tests[@]}"; do
-    if run "$test" 120 "./$test"; then
-        debug "$test" || echo "WARNING: CSR dump failed after $test."
-    else
-        rc=$?
-        debug "$test" || echo "WARNING: CSR dump failed after $test."
-        exit "$rc"
-    fi
+    run "$test" 120 "./$test"
 done
 echo "PASS: ${#tests[@]} hardware tests completed"

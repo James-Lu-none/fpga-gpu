@@ -2,12 +2,6 @@ name: FPGA-GPU CI
 on:
   push:
   workflow_dispatch:
-    inputs:
-      program_mode:
-        description: 'FPGA target: SRAM or persistent configuration Flash'
-        type: choice
-        options: [sram, flash]
-        default: sram
 permissions:
   contents: read
 # Hold the DUT reservation across power-on, loading and power-off jobs.
@@ -161,15 +155,14 @@ jobs:
           artifact-ids: ${{ needs.bitstream.outputs.artifact_id }}
           path: artifacts/bitstream
           merge-multiple: true
-      - name: Verify, program FPGA and check PCIe
+      - name: Verify and program FPGA configuration Flash
         env:
           VIVADO_LAB_SETTINGS: /opt/Xilinx/2026.1/Vivado_Lab/settings64.sh
-          FPGA_PROGRAM_MODE: ${{ inputs.program_mode || 'sram' }}
           EXPECTED_BIN_SHA256: ${{ needs.bitstream.outputs.bin_sha256 }}
         run: |
           mkdir -p artifacts/testbench
           set -o pipefail
-          bash ci/load-bitstream.sh artifacts/bitstream --source-sha "$GITHUB_SHA" --bin-sha256 "$EXPECTED_BIN_SHA256" --program-mode "$FPGA_PROGRAM_MODE" 2>&1 | tee artifacts/testbench/loading.log
+          bash ci/load-bitstream.sh artifacts/bitstream --source-sha "$GITHUB_SHA" --bin-sha256 "$EXPECTED_BIN_SHA256" --program-mode flash 2>&1 | tee artifacts/testbench/loading.log
       - name: Preserve loading diagnostics locally
         if: always()
         run: bash ci/local-artifacts.sh save testbench
@@ -180,8 +173,22 @@ jobs:
       #     name: testbench-loading-${{ github.run_id }}-${{ github.run_attempt }}
       #     path: artifacts/testbench/
       #     retention-days: 7
-  hardware-test:
+  cold-boot:
     needs: load-bitstream
+    runs-on: [self-hosted, testbench]
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shut down DUT B, power on again and wait for SSH
+        run: |
+          mkdir -p artifacts/cold-boot
+          set -o pipefail
+          python3 -u ci/testbench.py cold-boot 2>&1 | tee artifacts/cold-boot/power.log
+      - name: Preserve cold-boot diagnostics locally
+        if: always()
+        run: bash ci/local-artifacts.sh save cold-boot
+  hardware-test:
+    needs: cold-boot
     runs-on: [self-hosted, testbench]
     timeout-minutes: 35
     steps:
@@ -197,7 +204,7 @@ jobs:
         if: always()
         run: bash ci/local-artifacts.sh save hardware-test
   power-off:
-    needs: [power-on, load-bitstream, hardware-test]
+    needs: [power-on, load-bitstream, cold-boot, hardware-test]
     if: ${{ always() && needs.power-on.result != 'skipped' }}
     runs-on: [self-hosted, testbench]
     timeout-minutes: 5

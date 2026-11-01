@@ -186,6 +186,25 @@ def shutdown_main():
         controller.close()
 
 
+def cold_boot_main():
+    ssh = ssh_command()
+    boot_command = ssh + ['cat /proc/sys/kernel/random/boot_id']
+    before = None
+    try:
+        before = subprocess.check_output(boot_command, text=True, timeout=15).strip()
+        log(f'DUT boot ID before shutdown: {before}')
+    except (OSError, subprocess.SubprocessError) as exc:
+        log(f'Could not read pre-shutdown boot ID; continuing with Arduino power feedback: {exc}')
+    shutdown_main()
+    log('DUT power is OFF; waiting 5 seconds before power-on')
+    time.sleep(5)
+    smoke_main(argparse.Namespace(power_action='on'))
+    after = subprocess.check_output(boot_command, text=True, timeout=15).strip()
+    if not re.fullmatch(r'[0-9a-fA-F-]{36}', after) or after == before:
+        raise RuntimeError(f'DUT did not report a new valid boot ID: {after!r}')
+    log(f'PASS: DUT power cycle completed; new boot ID: {after}')
+
+
 def verify_binary(directory, expected_sha, expected_digest):
     """Validate bin-only transfer against same-run producer job outputs."""
     if not re.fullmatch(r'[0-9a-fA-F]{40}', expected_sha):
@@ -302,9 +321,13 @@ def load_main(args):
             run_logged(dut_command(remote, 'prepare'), 30)
             run_logged(program_command(lab, 'program', bundle, logs, args.program_mode),
                        600 if args.program_mode == 'flash' else 180)
-            time.sleep(3)
-            run_logged(dut_command(remote, 'rescan'), 45)
-        log(f'PASS: {args.program_mode} programming and FPGA PCIe enumeration')
+            if args.program_mode == 'sram':
+                time.sleep(3)
+                run_logged(dut_command(remote, 'rescan'), 45)
+        if args.program_mode == 'flash':
+            log('PASS: Flash programmed and verified; PCIe enumeration will occur during cold boot')
+        else:
+            log('PASS: SRAM programming and FPGA PCIe enumeration')
     finally:
         controller.close()
 
@@ -344,6 +367,7 @@ def main():
     smoke = commands.add_parser('smoke', help='Check power and SSH readiness')
     smoke.add_argument('--power-action', choices=['check', 'on', 'off'], default='on')
     commands.add_parser('shutdown', help='OS shutdown with Arduino forced-off fallback')
+    commands.add_parser('cold-boot', help='Shut down DUT, wait 5 seconds, power on and verify a new boot')
     commands.add_parser('hardware-test', help='Build and test driver/firmware on DUT B')
     commands.add_parser('debug', help='Dump DUT BAR0 diagnostics without firmware/UART')
     bundle = commands.add_parser('verify-bundle', help='Verify local producer bundle')
@@ -360,6 +384,8 @@ def main():
         smoke_main(args)
     elif args.command == 'shutdown':
         shutdown_main()
+    elif args.command == 'cold-boot':
+        cold_boot_main()
     elif args.command == 'hardware-test':
         hardware_test_main()
     elif args.command == 'debug':
