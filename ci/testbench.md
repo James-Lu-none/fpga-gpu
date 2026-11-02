@@ -60,13 +60,13 @@ sudo apt-get install build-essential cmake clang-18 llvm-18-dev zlib1g-dev libzs
 
 L2 isolation mode
 
-1. Push builds and Run workflow default to `hardware_mode: l2` during memory-path debugging.
+1. Select `hardware_mode: l2` manually in Run workflow to run isolation tests.
 2. CI builds the diagnostic bitstream, programs Flash and cold-boots B as usual.
 3. B builds/loads only the driver and runs `test_l2_memory` for all six paths, then `test_vrf`; no firmware or OpenCL kernel is used.
 
 - Paths: direct L2, L1/L2, then LSU/L1/L2 with uniform, paired, lane-0-only and lane-1-only operands. Host verifies DDR `0x1000-0x1FFF` and both guard pages via DMA.
 - Inspect `<path>-memory.log` and `<path>_memory_cpu.bin` / `<path>_memory_gpu.bin`; first L1/L2/AXI addresses are printed in Actions. All six cases and the VRF test report before the job fails.
-- Select `hardware_mode: gpu` manually to build and test the full GPU instead. This requires its own bitstream; it does not run after the isolation cases.
+- Push builds and Run workflow default to `gpu`: build the full GPU bitstream, program Flash, cold-boot B, then run ISA, OpenCL minimal and larger tests. A minimal-test failure skips larger tests.
 
 - In the same `hardware-test` job, `vrf-registers.log` contains both VRF read-port samples and comparisons across all warps/registers, lane masks and operand metadata.
 - VRF testing uses BAR0 snapshots directly and bypasses instruction fetch, ALU, scheduler and DDR.
