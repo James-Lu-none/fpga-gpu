@@ -71,7 +71,7 @@ if [[ $mode == gpu ]]; then
     run firmware-load 90 ./load_fw "$resource"
 else
     run driver-build 300 make -C "$driver/driver" -j"$jobs" KDIR="$kdir"
-    run l2-test-build 60 make -C "$driver/tests" test_l2_memory
+    run l2-test-build 60 make -C "$driver/tests" test_l2_memory test_vrf
 fi
 run module-load 30 insmod "$driver/driver/fpgagpu_driver.ko" queue_mode=0
 loaded=1
@@ -92,8 +92,13 @@ if [[ $mode == l2 ]]; then
             failed=1
         fi
     done
+    if run vrf-registers 120 ./test_vrf "$resource"; then
+        cat "$logs/vrf-registers.log"
+    else
+        failed=1
+    fi
     (( failed == 0 )) || exit 1
-    echo 'PASS: L2, L1 and LSU memory paths; Host DMA readback and guards verified'
+    echo 'PASS: L2, L1, LSU and VRF isolation tests'
     exit 0
 fi
 minimal_failed=0
