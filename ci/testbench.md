@@ -51,7 +51,7 @@ sudo apt-get install build-essential cmake clang-18 llvm-18-dev zlib1g-dev libzs
 - Local logs: `/home/github-runner/ci-artifacts/OWNER/REPO/RUN/ATTEMPT/KIND`.
 - Hardware test logs include UART, step logs and `dut-results.tar.gz`.
 - Cold-boot logs are retained under the `cold-boot` artifact directory.
-- B first runs direct ISA store/copy/register/rs1-add tests, then the four OpenCL minimal cases and larger tests.
+- In `gpu` mode, B first runs direct ISA store/copy/register/rs1-add tests, then the four OpenCL minimal cases and larger tests.
 - Direct ISA logs are named `isa-store`, `isa-copy`, `isa-register` and `isa-rs1-add`.
 - Minimal test logs are named `minimal-constant`, `minimal-scalar`, `minimal-copy` and `minimal-thread-id`.
 - All eight minimal cases report results; any failure skips larger tests. Cleanup collects logs and unloads the module.
@@ -60,10 +60,10 @@ sudo apt-get install build-essential cmake clang-18 llvm-18-dev zlib1g-dev libzs
 
 L2 isolation mode
 
-1. In Actions, choose Run workflow and set `hardware_mode` to `l2`.
+1. Push builds and Run workflow default to `hardware_mode: l2` during memory-path debugging.
 2. CI builds the diagnostic bitstream, programs Flash and cold-boots B as usual.
 3. B builds/loads only the driver and runs `test_l2_memory` for all six paths; no firmware or OpenCL kernel is used.
 
 - Paths: direct L2, L1/L2, then LSU/L1/L2 with uniform, paired, lane-0-only and lane-1-only operands. Host verifies DDR `0x1000-0x1FFF` and both guard pages via DMA.
 - Inspect `<path>-memory.log` and `<path>_memory_cpu.bin` / `<path>_memory_gpu.bin`; first L1/L2/AXI addresses are printed in Actions. All six cases report before the job fails.
-- Push builds and the default manual option use `gpu`.
+- Select `hardware_mode: gpu` manually to build and test the full GPU instead. This requires its own bitstream; it does not run after the isolation cases.

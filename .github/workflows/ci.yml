@@ -1,5 +1,5 @@
 name: FPGA-GPU CI
-run-name: FPGA-GPU CI (${{ inputs.hardware_mode || 'gpu' }})
+run-name: FPGA-GPU CI (${{ inputs.hardware_mode || 'l2' }})
 on:
   push:
   workflow_dispatch:
@@ -7,10 +7,10 @@ on:
       hardware_mode:
         description: Hardware under test
         type: choice
-        default: gpu
-        options: [gpu, l2]
+        default: l2
+        options: [l2, gpu]
 env:
-  FPGAGPU_HARDWARE_MODE: ${{ inputs.hardware_mode || 'gpu' }}
+  FPGAGPU_HARDWARE_MODE: ${{ inputs.hardware_mode || 'l2' }}
 permissions:
   contents: read
 # Hold the DUT reservation across power-on, loading and power-off jobs.
