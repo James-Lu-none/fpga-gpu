@@ -57,3 +57,13 @@ sudo apt-get install build-essential cmake clang-18 llvm-18-dev zlib1g-dev libzs
 - All eight minimal cases report results; any failure skips larger tests. Cleanup collects logs and unloads the module.
 - Power-off runs after success or failure: SSH shutdown, then Arduino K after 60 seconds if needed.
 - Runner/Arduino must remain available for power-off. B workspaces remain for inspection.
+
+L2 isolation mode
+
+1. In Actions, choose Run workflow and set `hardware_mode` to `l2`.
+2. CI builds the diagnostic bitstream, programs Flash and cold-boots B as usual.
+3. B builds/loads only the driver and runs `test_l2_memory`; no firmware or OpenCL kernel is used.
+
+- The pattern writer replaces GPC and feeds the production L2. Host verifies DDR `0x1000-0x1FFF` and both guard pages via DMA.
+- Inspect `l2-memory.log` and `l2_memory_cpu.bin` / `l2_memory_gpu.bin` in hardware-test results.
+- Push builds and the default manual option use `gpu`.

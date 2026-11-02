@@ -29,6 +29,7 @@ collect_logs() {
 }
 trap collect_logs EXIT
 if [[ $mode == implementation ]]; then
+    printf '%s\n' "${FPGAGPU_HARDWARE_MODE:-gpu}" > "$CI_OUTPUT_DIR/hardware-mode.txt"
     git rev-parse HEAD > "$CI_OUTPUT_DIR/source-sha.txt"
     git submodule status --recursive > "$CI_OUTPUT_DIR/submodules.txt"
     vivado -version > "$CI_OUTPUT_DIR/vivado-version.txt"

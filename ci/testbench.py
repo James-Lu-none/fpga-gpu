@@ -337,10 +337,16 @@ def hardware_test_main():
     logs.mkdir(parents=True, exist_ok=True)
     ssh = ssh_command()
     wait_ssh(ssh_command())
-    remote = deploy(logs, ('fpga-gpu-driver', 'fpga-gpu-firmware', 'fpga-gpu-compiler'))
+    mode = os.environ.get('FPGAGPU_HARDWARE_MODE', 'gpu')
+    if mode not in ('gpu', 'l2'):
+        raise ValueError(f'Unknown hardware mode: {mode}')
+    components = ('fpga-gpu-driver',) if mode == 'l2' else (
+        'fpga-gpu-driver', 'fpga-gpu-firmware', 'fpga-gpu-compiler')
+    remote = deploy(logs, components)
     try:
         with capture_uart(remote, logs):
-            command = shlex.join(['sudo', '-n', 'bash', f'{remote}/ci/hardware-test.sh'])
+            command = shlex.join(['sudo', '-n', 'env', f'FPGAGPU_HARDWARE_MODE={mode}',
+                                  'bash', f'{remote}/ci/hardware-test.sh'])
             run_logged(ssh + [command], 1800)
     finally:
         # Preserve remote logs even when a test or module load fails.

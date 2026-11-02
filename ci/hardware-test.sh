@@ -10,6 +10,9 @@ firmware="$root/fpga-gpu-firmware"
 compiler="$root/fpga-gpu-compiler"
 jobs=$(nproc)
 kdir="/lib/modules/$(uname -r)/build"
+mode=${FPGAGPU_HARDWARE_MODE:-gpu}
+[[ $mode == gpu || $mode == l2 ]] || { echo "ERROR: Invalid hardware mode: $mode"; exit 2; }
+echo "Hardware mode: $mode"
 loaded=0
 resource=
 export FPGAGPU_COMPILER_DIR="$compiler" LD_LIBRARY_PATH="$driver/umd"
@@ -46,24 +49,30 @@ trap finish EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-for tool in make gcc g++ cmake clang-18 riscv64-unknown-elf-gcc \
-    riscv64-unknown-elf-objcopy riscv64-unknown-elf-objdump insmod rmmod dmesg timeout; do
+tools=(make gcc insmod rmmod dmesg timeout)
+if [[ $mode == gpu ]]; then
+    tools+=(g++ cmake clang-18 riscv64-unknown-elf-gcc riscv64-unknown-elf-objcopy riscv64-unknown-elf-objdump)
+    [[ -d /usr/lib/llvm-18/lib/cmake/llvm ]] || { echo 'ERROR: Require LLVM 18 development files.'; exit 1; }
+fi
+for tool in "${tools[@]}"; do
     command -v "$tool" > /dev/null || { echo "ERROR: Missing DUT dependency: $tool"; exit 1; }
 done
-[[ -d $kdir && -d /usr/lib/llvm-18/lib/cmake/llvm ]] || {
-    echo "ERROR: Require running-kernel headers at $kdir and LLVM 18 development files."
-    exit 1
-}
+[[ -d $kdir ]] || { echo "ERROR: Require running-kernel headers at $kdir"; exit 1; }
 [[ ! -d /sys/module/fpgagpu_driver ]] || { echo 'ERROR: fpgagpu_driver is already loaded.'; exit 1; }
 resource=$(python3 "$root/ci/dut.py" device)
 run dmesg-before 15 dmesg --color=never
-run compiler-configure 300 cmake -S "$compiler" -B "$compiler/build" \
-    -DCMAKE_BUILD_TYPE=Release -DLLVM_DIR=/usr/lib/llvm-18/lib/cmake/llvm -DBUILD_TESTING=OFF
-run compiler-build 600 cmake --build "$compiler/build" --parallel "$jobs"
-run firmware-build 300 make -C "$firmware" -j"$jobs"
-run driver-build 300 make -C "$driver" -j"$jobs" KDIR="$kdir"
-cd "$firmware"
-run firmware-load 90 ./load_fw "$resource"
+if [[ $mode == gpu ]]; then
+    run compiler-configure 300 cmake -S "$compiler" -B "$compiler/build" \
+        -DCMAKE_BUILD_TYPE=Release -DLLVM_DIR=/usr/lib/llvm-18/lib/cmake/llvm -DBUILD_TESTING=OFF
+    run compiler-build 600 cmake --build "$compiler/build" --parallel "$jobs"
+    run firmware-build 300 make -C "$firmware" -j"$jobs"
+    run driver-build 300 make -C "$driver" -j"$jobs" KDIR="$kdir"
+    cd "$firmware"
+    run firmware-load 90 ./load_fw "$resource"
+else
+    run driver-build 300 make -C "$driver/driver" -j"$jobs" KDIR="$kdir"
+    run l2-test-build 60 make -C "$driver/tests" test_l2_memory
+fi
 run module-load 30 insmod "$driver/driver/fpgagpu_driver.ko" queue_mode=0
 loaded=1
 for ((attempt=0; attempt<50; attempt++)); do
@@ -74,6 +83,12 @@ done
     echo 'ERROR: Driver did not bind/create /dev/fpgagpu0.'; exit 1;
 }
 cd "$driver/tests"
+if [[ $mode == l2 ]]; then
+    run l2-memory 60 ./test_l2_memory "$resource"
+    cat "$logs/l2-memory.log"
+    echo 'PASS: FPGA L2-to-DDR write and Host DMA readback'
+    exit 0
+fi
 minimal_failed=0
 for mode in store copy register rs1-add; do
     if run "isa-$mode" 120 ./test_isa_memory "$mode"; then

@@ -2,6 +2,14 @@ name: FPGA-GPU CI
 on:
   push:
   workflow_dispatch:
+    inputs:
+      hardware_mode:
+        description: Hardware under test
+        type: choice
+        default: gpu
+        options: [gpu, l2]
+env:
+  FPGAGPU_HARDWARE_MODE: ${{ inputs.hardware_mode || 'gpu' }}
 permissions:
   contents: read
 # Hold the DUT reservation across power-on, loading and power-off jobs.
@@ -111,7 +119,7 @@ jobs:
         run: |
           mkdir -p artifacts/bitstream
           if [ -d artifacts/vivado ]; then
-            find artifacts/vivado -maxdepth 1 -type f \( -name 'top.bit' -o -name 'top.bin' -o -name 'bitstream*' -o -name '*version.txt' -o -name 'source-sha.txt' -o -name 'submodules.txt' -o -name 'checkpoint.sha256' \) -exec cp {} artifacts/bitstream/ \;
+            find artifacts/vivado -maxdepth 1 -type f \( -name 'top.bit' -o -name 'top.bin' -o -name 'bitstream*' -o -name '*version.txt' -o -name 'source-sha.txt' -o -name 'submodules.txt' -o -name 'checkpoint.sha256' -o -name 'hardware-mode.txt' \) -exec cp {} artifacts/bitstream/ \;
           fi
           bash ci/local-artifacts.sh save bitstream
       - name: Verify bitstream bundle for transfer
@@ -195,7 +203,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - name: Build driver, load firmware and run hardware tests on DUT B
+      - name: Build driver and run selected hardware tests on DUT B
         run: |
           mkdir -p artifacts/hardware-test
           set -o pipefail
