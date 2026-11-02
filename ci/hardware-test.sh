@@ -84,9 +84,16 @@ done
 }
 cd "$driver/tests"
 if [[ $mode == l2 ]]; then
-    run l2-memory 60 ./test_l2_memory "$resource"
-    cat "$logs/l2-memory.log"
-    echo 'PASS: FPGA L2-to-DDR write and Host DMA readback'
+    failed=0
+    for path in l2 l1 lsu-uniform lsu-pair lsu-lane0 lsu-lane1; do
+        if run "$path-memory" 60 ./test_l2_memory "$resource" "$path"; then
+            cat "$logs/$path-memory.log"
+        else
+            failed=1
+        fi
+    done
+    (( failed == 0 )) || exit 1
+    echo 'PASS: L2, L1 and LSU memory paths; Host DMA readback and guards verified'
     exit 0
 fi
 minimal_failed=0

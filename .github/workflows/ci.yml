@@ -1,4 +1,5 @@
 name: FPGA-GPU CI
+run-name: FPGA-GPU CI (${{ inputs.hardware_mode || 'gpu' }})
 on:
   push:
   workflow_dispatch:

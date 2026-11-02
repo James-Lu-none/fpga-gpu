@@ -62,8 +62,8 @@ L2 isolation mode
 
 1. In Actions, choose Run workflow and set `hardware_mode` to `l2`.
 2. CI builds the diagnostic bitstream, programs Flash and cold-boots B as usual.
-3. B builds/loads only the driver and runs `test_l2_memory`; no firmware or OpenCL kernel is used.
+3. B builds/loads only the driver and runs `test_l2_memory` for all six paths; no firmware or OpenCL kernel is used.
 
-- The pattern writer replaces GPC and feeds the production L2. Host verifies DDR `0x1000-0x1FFF` and both guard pages via DMA.
-- Inspect `l2-memory.log` and `l2_memory_cpu.bin` / `l2_memory_gpu.bin` in hardware-test results.
+- Paths: direct L2, L1/L2, then LSU/L1/L2 with uniform, paired, lane-0-only and lane-1-only operands. Host verifies DDR `0x1000-0x1FFF` and both guard pages via DMA.
+- Inspect `<path>-memory.log` and `<path>_memory_cpu.bin` / `<path>_memory_gpu.bin`; first L1/L2/AXI addresses are printed in Actions. All six cases report before the job fails.
 - Push builds and the default manual option use `gpu`.
