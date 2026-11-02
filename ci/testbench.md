@@ -70,3 +70,6 @@ L2 isolation mode
 
 - In the same `hardware-test` job, `vrf-registers.log` contains both VRF read-port samples and comparisons across all warps/registers, lane masks and operand metadata.
 - VRF testing uses BAR0 snapshots directly and bypasses instruction fetch, ALU, scheduler and DDR.
+
+- `implementation` first runs VRF post-synthesis functional simulation in `l2` mode. A failure there skips bitstream/loading jobs; inspect `vrf-netlist/simulation.log` in local Vivado artifacts.
+- VRF failure output includes aligned addresses, R0-select bits and raw BRAM data, distinguishing read-address/RAM faults from operand selection faults.
