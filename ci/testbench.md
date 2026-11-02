@@ -73,3 +73,5 @@ L2 isolation mode
 
 - `implementation` first runs VRF post-synthesis functional simulation in `l2` mode. A failure there skips bitstream/loading jobs; inspect `vrf-netlist/simulation.log` in local Vivado artifacts.
 - VRF failure output includes aligned addresses, R0-select bits and raw BRAM data, distinguishing read-address/RAM faults from operand selection faults.
+
+- GPU `test_dma` includes short/unaligned/cross-page payload and guard checks. Branch divergence verifies input and output sentinel in VRAM before dispatch to distinguish DMA failures from execution failures.
