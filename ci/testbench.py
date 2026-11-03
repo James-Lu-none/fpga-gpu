@@ -12,6 +12,7 @@ import select
 import shlex
 import shutil
 import subprocess
+import tarfile
 import termios
 import time
 
@@ -96,7 +97,6 @@ def ssh_command():
         '-o', 'ConnectTimeout=10', '-o', 'StrictHostKeyChecking=no',
         '-o', 'UserKnownHostsFile=/dev/null',
         os.environ.get('DUT_SSH_TARGET', 'user@10.0.0.7'),
-        'hostname; uname -r; id',
     ]
 
 
@@ -105,7 +105,7 @@ def wait_ssh(command, timeout=180):
     while time.monotonic() < deadline:
         remaining = deadline - time.monotonic()
         try:
-            result = subprocess.run(command, capture_output=True, text=True,
+            result = subprocess.run(command + ['hostname; uname -r; id'], capture_output=True, text=True,
                                     timeout=min(15, remaining))
             if result.returncode == 0:
                 log(result.stdout.strip())
@@ -167,7 +167,7 @@ def shutdown_main():
             log('PASS: DUT power is already OFF')
             return
         try:
-            command = ssh_command()[:-1] + ['sudo -n shutdown -h now']
+            command = ssh_command() + ['sudo -n shutdown -h now']
             # SSH can disconnect as the OS shuts down; power feedback is decisive.
             result = subprocess.run(command, timeout=15, check=False)
             log(f'Shutdown request SSH exit code: {result.returncode}')
@@ -204,10 +204,10 @@ def verify_binary(directory, expected_sha, expected_digest):
     print(f'PASS: top.bin matches producer checksum for CI source {expected_sha}')
 
 
-def run_logged(command, timeout, *, input_text=None):
+def run_logged(command, timeout):
     log(f'RUN: {command[0]}')
     # Stream output to workflow/tee even if the external process times out.
-    subprocess.run(command, input=input_text, text=True, check=True, timeout=timeout)
+    subprocess.run(command, check=True, timeout=timeout)
 
 
 def find_vivado_lab():
@@ -230,13 +230,40 @@ def program_command(lab, action, bundle, logs, mode):
             '-tclargs', action, str(bundle / 'top.bin'), mode]
 
 
+def deploy(logs, components=()):
+    """Deploy scripts and selected pinned source trees to an isolated directory on B."""
+    archive = logs / 'deployment.tar.gz'
+    with tarfile.open(archive, 'w:gz') as bundle:
+        for name in ('dut.py', 'hardware-test.sh'):
+            bundle.add(HERE / name, arcname='ci/' + name)
+        for component in components:
+            source = HERE.parent / component
+            tracked = subprocess.check_output(['git', '-C', str(source), 'ls-files', '-z'])
+            commit = subprocess.check_output(['git', '-C', str(source), 'rev-parse', 'HEAD'], text=True)
+            (logs / f'{component}-sha.txt').write_text(commit)
+            for name in tracked.decode().split('\0'):
+                if name:
+                    bundle.add(source / name, arcname=f'{component}/{name}', recursive=False)
+    ssh = ssh_command()
+    remote = subprocess.check_output(ssh + ['mktemp -d /tmp/fpgagpu-ci.XXXXXXXXXX'], text=True, timeout=20).strip()
+    if not re.fullmatch(r'/tmp/fpgagpu-ci\.[A-Za-z0-9]+', remote):
+        raise RuntimeError(f'Unexpected remote workspace: {remote!r}')
+    (logs / 'dut-workspace.txt').write_text(remote + '\n')
+    with archive.open('rb') as source:
+        subprocess.run(ssh + [shlex.join(['tar', '-xzf', '-', '-C', remote])],
+                       stdin=source, check=True, timeout=120)
+    log(f'Deployed DUT workspace: {remote}')
+    return remote
+
+
+def dut_command(remote, *args):
+    return ssh_command() + [shlex.join(['sudo', '-n', 'python3', '-u', f'{remote}/ci/dut.py', *args])]
+
+
 @contextmanager
-def capture_uart(ssh, logs):
-    # Send only DUT operations; no script installation on B is needed.
-    source = (HERE / 'dut.py').read_text()
-    remote = 'sudo -n python3 -u -c ' + shlex.quote(source) + ' uart'
+def capture_uart(remote, logs):
     with (logs / 'uart.log').open('wb') as output:
-        process = subprocess.Popen(ssh + [remote], stdin=subprocess.PIPE,
+        process = subprocess.Popen(dut_command(remote, 'uart'), stdin=subprocess.PIPE,
                                    stdout=output, stderr=subprocess.STDOUT)
         try:
             deadline = time.monotonic() + 20
@@ -264,23 +291,45 @@ def load_main(args):
     lab = find_vivado_lab()
     logs = Path('artifacts/testbench').resolve()
     logs.mkdir(parents=True, exist_ok=True)
-    ssh = ssh_command()[:-1]
-    dut_source = (HERE / 'dut.py').read_text()
     # Power-on is a separate job. Check state without turning the DUT on here.
     controller = Arduino(os.environ.get('ARDUINO_DEVICE', '/dev/ttyACM0'))
     try:
         set_power(controller, 'check')
         wait_ssh(ssh_command())
         run_logged(program_command(lab, 'detect', bundle, logs, args.program_mode), 90)
-        with capture_uart(ssh, logs):
-            run_logged(ssh + ['sudo -n python3 - prepare'], 30, input_text=dut_source)
+        remote = deploy(logs)
+        with capture_uart(remote, logs):
+            run_logged(dut_command(remote, 'prepare'), 30)
             run_logged(program_command(lab, 'program', bundle, logs, args.program_mode),
                        600 if args.program_mode == 'flash' else 180)
+            # Flash mode boots the FPGA from the newly verified image via JTAG.
+            # Re-enumerate the removed PCIe endpoint without rebooting DUT B.
             time.sleep(3)
-            run_logged(ssh + ['sudo -n python3 - rescan'], 45, input_text=dut_source)
-        log(f'PASS: {args.program_mode} programming and FPGA PCIe enumeration')
+            run_logged(dut_command(remote, 'rescan'), 45)
+        log(f'PASS: {args.program_mode.upper()} programming and FPGA PCIe enumeration without DUT reboot')
     finally:
         controller.close()
+
+
+def hardware_test_main():
+    logs = Path('artifacts/hardware-test').resolve()
+    logs.mkdir(parents=True, exist_ok=True)
+    ssh = ssh_command()
+    wait_ssh(ssh_command())
+    components = ('fpga-gpu-driver', 'fpga-gpu-firmware', 'fpga-gpu-compiler')
+    remote = deploy(logs, components)
+    try:
+        with capture_uart(remote, logs):
+            command = shlex.join(['sudo', '-n', 'bash', f'{remote}/ci/hardware-test.sh'])
+            run_logged(ssh + [command], 1800)
+    finally:
+        # Preserve remote logs even when a test or module load fails.
+        with (logs / 'dut-results.tar.gz').open('wb') as output:
+            result = subprocess.run(ssh + [f'sudo -n tar -czf - -C {shlex.quote(remote)} results'],
+                                    stdout=output, timeout=30)
+        if result.returncode:
+            log(f'WARNING: DUT results collection failed; remote workspace: {remote}')
+        # The workspace remains on B for inspection until its /tmp is cleaned.
 
 
 def main():
@@ -289,6 +338,7 @@ def main():
     smoke = commands.add_parser('smoke', help='Check power and SSH readiness')
     smoke.add_argument('--power-action', choices=['check', 'on', 'off'], default='on')
     commands.add_parser('shutdown', help='OS shutdown with Arduino forced-off fallback')
+    commands.add_parser('hardware-test', help='Build and test driver/firmware on DUT B')
     bundle = commands.add_parser('verify-bundle', help='Verify local producer bundle')
     bundle.add_argument('directory', type=Path)
     bundle.add_argument('--source-sha', required=True)
@@ -303,6 +353,8 @@ def main():
         smoke_main(args)
     elif args.command == 'shutdown':
         shutdown_main()
+    elif args.command == 'hardware-test':
+        hardware_test_main()
     elif args.command == 'verify-bundle':
         verify(args.directory, args.source_sha)
     else:

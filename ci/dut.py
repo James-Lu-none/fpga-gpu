@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""DUT B operations: FPGA PCIe preparation/rescan and UART capture."""
+"""DUT B primitives: PCIe preparation/discovery and UART capture."""
 import argparse
 import fcntl
 import os
@@ -55,7 +55,7 @@ def uart_main(args):
         attrs[6][termios.VMIN] = attrs[6][termios.VTIME] = 0
         termios.tcsetattr(fd, termios.TCSANOW, attrs)
         print('UART capture ready: 115200 baud, 8N1', flush=True)
-        deadline = time.monotonic() + 900
+        deadline = time.monotonic() + 3600
         while time.monotonic() < deadline:
             ready, _, _ = select.select([fd, sys.stdin.buffer], [], [], 1)
             if sys.stdin.buffer in ready and not os.read(0, 1):
@@ -66,7 +66,7 @@ def uart_main(args):
                     raise RuntimeError('FPGA UART disconnected')
                 sys.stdout.buffer.write(chunk)
                 sys.stdout.buffer.flush()
-        raise TimeoutError('UART capture exceeded 900 seconds')
+        raise TimeoutError('UART capture exceeded 3600 seconds')
     finally:
         os.close(fd)
 
@@ -78,9 +78,15 @@ def main():
     commands.add_parser('rescan', help='Rescan PCIe and require one FPGA endpoint')
     uart = commands.add_parser('uart', help='Capture 115200-baud UART until stdin closes')
     uart.add_argument('--device', default='/dev/ttyUSB0')
+    commands.add_parser('device', help='Require one unbound FPGA and print its resource0 path')
     args = parser.parse_args()
     if args.command == 'uart':
         uart_main(args)
+    elif args.command == 'device':
+        devices = endpoints()
+        if len(devices) != 1 or (devices[0] / 'driver').exists():
+            raise RuntimeError('Require exactly one unbound FPGA endpoint')
+        print(devices[0] / 'resource0')
     else:
         pci_main(args.command)
 
