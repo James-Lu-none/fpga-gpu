@@ -2,15 +2,17 @@
 
 1. Build and simulate on the `vivado` runner, implement and generate `top.bin`.
 2. Power on B through Arduino on runner A and wait for SSH.
-3. Verify the binary checksum, remove the unbound PCIe endpoint, program Flash, boot the FPGA and rescan PCIe. B stays powered on.
-4. Build the compiler, firmware and driver on B; load firmware/module and run DMA, buffer copy, vector add, matrix multiplication, occupancy and branch divergence tests.
-5. Collect UART, dmesg and test results; unload the module and shut B down after success or failure.
+3. `load-bitstream`: verify the binary checksum, remove the unbound PCIe endpoint and program the selected Flash/SRAM target.
+4. `pcie-ready`: rescan for 30 seconds and verify one `10ee:7021` endpoint, live config-space response, assigned BAR0/BAR1 and no bound driver. On readiness/SSH failure, capture available diagnostics and power-cycle B once, then verify again. SRAM mode reloads the same verified binary after the power cycle; Flash mode boots the programmed image.
+5. `hardware-test`: build the compiler, firmware and driver on B; load firmware/module and run DMA, buffer copy, vector add, matrix multiplication, occupancy and branch divergence tests.
+6. Collect UART, dmesg and test results; unload the module and shut B down after success or failure. Multiple devices or an already-bound driver fail without automatic recovery.
 
 - A uses `/dev/ttyACM0` at 9600 baud and `/opt/Xilinx/2026.1/Vivado_Lab/settings64.sh`.
 - SSH uses `/home/github-runner/.ssh/pve-core` and `user@10.0.0.7`; B needs passwordless sudo and running-kernel headers.
 - B captures `/dev/ttyUSB0` at 115200 baud. Close other serial monitors.
 - `ci/testbench.py` handles A-side control, deployment and evidence collection. `ci/dut.py` handles B PCIe/UART operations; `ci/hardware-test.sh` builds and tests on B.
 - Only `top.bin` is uploaded. Logs remain at `/home/github-runner/ci-artifacts/OWNER/REPO/RUN/ATTEMPT/KIND`; deployed B workspaces remain under `/tmp/fpgagpu-ci.*`.
+- `pcie-ready/pcie.log` and `recovery.json` preserve the direct result and fallback outcome. Actions step summary also reports whether a power cycle was needed.
 - See `changelog.md` for root causes, archived diagnostics and review bases.
 
 B build dependencies:

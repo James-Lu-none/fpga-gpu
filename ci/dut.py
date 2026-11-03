@@ -5,6 +5,7 @@ import fcntl
 import os
 from pathlib import Path
 import select
+import subprocess
 import sys
 import termios
 import time
@@ -13,6 +14,40 @@ import time
 def endpoints():
     return [p for p in Path('/sys/bus/pci/devices').iterdir() 
         if (p / 'vendor').read_text().strip() == '0x10ee' and (p / 'device').read_text().strip() == '0x7021']
+
+
+def verify_endpoint(p):
+    if (p / 'driver').exists():
+        raise RuntimeError(f'{p.name} has a bound driver; refusing automatic recovery')
+    try:
+        with (p / 'config').open('rb') as config:
+            identity = config.read(4)
+    except OSError as exc:
+        print(f'PCIe config-space read failed: {exc}', flush=True)
+        return False
+    if identity != bytes.fromhex('ee102170'):
+        print(f'PCIe config-space identity unavailable: {identity.hex()}', flush=True)
+        return False
+    bars = (p / 'resource').read_text().splitlines()
+    for index, minimum in [(0, 0x30000), (1, 0x10000)]:
+        start, end, flags = (int(value, 16) for value in bars[index].split())
+        if start == 0 or end - start + 1 < minimum or not flags & 0x200:
+            print(f'PCIe BAR{index} not assigned correctly: {bars[index]}', flush=True)
+            return False
+        print(f'BAR{index}: 0x{start:x}-0x{end:x}', flush=True)
+    print(f'PASS: FPGA PCIe endpoint {p.name}; config ID=10ee:7021, BAR0/BAR1 assigned, driver unbound', flush=True)
+    return True
+
+
+def pci_diagnostics():
+    # Read-only evidence before any power-cycle recovery destroys link state.
+    for command in [['lspci', '-Dtv'], ['dmesg', '--color=never']]:
+        try:
+            output = subprocess.run(command, capture_output=True, text=True, timeout=5)
+            print(f'DIAGNOSTIC: {" ".join(command)} (exit={output.returncode})', flush=True)
+            print('\n'.join((output.stdout + output.stderr).splitlines()[-60:]), flush=True)
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            print(f'DIAGNOSTIC unavailable: {exc}', flush=True)
 
 
 def pci_main(action):
@@ -34,13 +69,14 @@ def pci_main(action):
             Path('/sys/bus/pci/rescan').write_text('1\n')
             devices = endpoints()
             if len(devices) == 1:
-                p = devices[0]
-                print(f'PASS: FPGA PCIe endpoint {p.name} (10ee:7021)', flush=True)
-                return
+                if verify_endpoint(devices[0]):
+                    return
             if len(devices) > 1:
                 raise RuntimeError('Multiple FPGA PCIe endpoints after rescan')
             time.sleep(2)
-        raise TimeoutError('FPGA PCIe endpoint did not enumerate after programming')
+        pci_diagnostics()
+        print('FAIL: FPGA PCIe endpoint did not become ready within 30 seconds', flush=True)
+        raise SystemExit(75)  # Explicit recoverable readiness failure, not any script error.
 
 
 def uart_main(args):
@@ -86,6 +122,7 @@ def main():
         devices = endpoints()
         if len(devices) != 1 or (devices[0] / 'driver').exists():
             raise RuntimeError('Require exactly one unbound FPGA endpoint')
+        # Keep stdout a path for hardware-test.sh; readiness was checked earlier.
         print(devices[0] / 'resource0')
     else:
         pci_main(args.command)

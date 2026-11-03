@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-03: Separate PCIe readiness and bounded recovery
+
+- A rebuilt image completed Flash verification and reached DONE=HIGH, but the Host could not enumerate its PCIe endpoint. The programming/rescan code matched the earlier passing version; the cause of this link-recovery failure remains unconfirmed.
+- Move post-programming rescan into `pcie-ready`, between loading and hardware tests. Check live PCI identity, BAR assignments and driver ownership instead of relying only on sysfs device presence.
+- On readiness timeout or SSH loss, preserve available evidence, power-cycle B once and retry. SRAM mode reloads the same verified CI binary after power-on; Flash mode uses the programmed Flash image. No repeated recovery loop or upstream-bus reset is attempted.
+- Keep both the failed direct attempt and fallback result in local artifacts and the Actions summary. Hardware tests require PCIe readiness; final shutdown still runs after failure.
+
 ## 2026-11-03: GPU bring-up fixes and diagnostic cleanup
 
 ### Outcome and evidence

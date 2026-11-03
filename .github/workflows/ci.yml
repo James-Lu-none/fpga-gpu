@@ -161,7 +161,7 @@ jobs:
           artifact-ids: ${{ needs.bitstream.outputs.artifact_id }}
           path: artifacts/bitstream
           merge-multiple: true
-      - name: Verify, program FPGA and check PCIe
+      - name: Verify and program FPGA
         env:
           VIVADO_LAB_SETTINGS: /opt/Xilinx/2026.1/Vivado_Lab/settings64.sh
           FPGA_PROGRAM_MODE: ${{ inputs.program_mode || 'flash' }}
@@ -180,8 +180,36 @@ jobs:
       #     name: testbench-loading-${{ github.run_id }}-${{ github.run_attempt }}
       #     path: artifacts/testbench/
       #     retention-days: 7
+  pcie-ready:
+    needs: [bitstream, load-bitstream]
+    runs-on: [self-hosted, testbench]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.bitstream.outputs.artifact_id }}
+          path: artifacts/bitstream
+          merge-multiple: true
+      - name: Rescan and verify PCIe with one power-cycle fallback
+        env:
+          VIVADO_LAB_SETTINGS: /opt/Xilinx/2026.1/Vivado_Lab/settings64.sh
+          FPGA_PROGRAM_MODE: ${{ inputs.program_mode || 'flash' }}
+          EXPECTED_BIN_SHA256: ${{ needs.bitstream.outputs.bin_sha256 }}
+        run: |
+          mkdir -p artifacts/pcie-ready
+          set -o pipefail
+          set +u
+          source "$VIVADO_LAB_SETTINGS"
+          set -u
+          python3 -u ci/testbench.py pcie-ready artifacts/bitstream --source-sha "$GITHUB_SHA" --bin-sha256 "$EXPECTED_BIN_SHA256" --program-mode "$FPGA_PROGRAM_MODE" 2>&1 | tee artifacts/pcie-ready/pcie.log
+      - name: Preserve PCIe recovery diagnostics locally
+        if: always()
+        run: bash ci/local-artifacts.sh save pcie-ready
   hardware-test:
-    needs: load-bitstream
+    needs: pcie-ready
     runs-on: [self-hosted, testbench]
     timeout-minutes: 35
     steps:
@@ -197,7 +225,7 @@ jobs:
         if: always()
         run: bash ci/local-artifacts.sh save hardware-test
   power-off:
-    needs: [power-on, load-bitstream, hardware-test]
+    needs: [power-on, load-bitstream, pcie-ready, hardware-test]
     if: ${{ always() && needs.power-on.result != 'skipped' }}
     runs-on: [self-hosted, testbench]
     timeout-minutes: 5

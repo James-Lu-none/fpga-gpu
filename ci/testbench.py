@@ -5,6 +5,7 @@ import array
 from contextlib import contextmanager
 import fcntl
 import hashlib
+import json
 import os
 from pathlib import Path
 import re
@@ -302,13 +303,51 @@ def load_main(args):
             run_logged(dut_command(remote, 'prepare'), 30)
             run_logged(program_command(lab, 'program', bundle, logs, args.program_mode),
                        600 if args.program_mode == 'flash' else 180)
-            # Flash mode boots the FPGA from the newly verified image via JTAG.
-            # Re-enumerate the removed PCIe endpoint without rebooting DUT B.
-            time.sleep(3)
-            run_logged(dut_command(remote, 'rescan'), 45)
-        log(f'PASS: {args.program_mode.upper()} programming and FPGA PCIe enumeration without DUT reboot')
+        log(f'PASS: {args.program_mode.upper()} programming; PCIe validation runs in the pcie-ready job')
     finally:
         controller.close()
+
+
+def pcie_ready_main(args):
+    bundle = args.bundle.resolve()
+    verify_binary(bundle, args.source_sha, args.bin_sha256)
+    logs = Path('artifacts/pcie-ready').resolve()
+    logs.mkdir(parents=True, exist_ok=True)
+    result = {'program_mode': args.program_mode, 'direct': 'failed',
+              'recovery': 'not-needed', 'result': 'failed'}
+    try:
+        # SSH transport failures may mean B hung during FPGA reconfiguration.
+        try:
+            remote = deploy(logs)
+            run_logged(dut_command(remote, 'rescan'), 75)
+            result['direct'] = 'passed'
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+            if isinstance(exc, subprocess.CalledProcessError) and exc.returncode not in (75, 255):
+                raise  # Ambiguous devices/bound drivers are not recovery candidates.
+            log(f'WARNING: Direct PCIe recovery failed: {exc}')
+            result['recovery'] = ('power-cycle-and-sram-reload' if args.program_mode == 'sram'
+                                  else 'power-cycle')
+            log(f'FALLBACK: {result["recovery"]}; one attempt only')
+            # Validate Lab availability before a power cycle loses the SRAM image.
+            lab = find_vivado_lab() if args.program_mode == 'sram' else None
+            shutdown_main()
+            time.sleep(5)
+            smoke_main(argparse.Namespace(power_action='on'))
+            # /tmp may have been cleaned at boot; deploy a fresh workspace.
+            remote = deploy(logs)
+            if args.program_mode == 'sram':
+                run_logged(dut_command(remote, 'prepare'), 30)
+                run_logged(program_command(lab, 'program', bundle, logs, 'sram'), 180)
+            run_logged(dut_command(remote, 'rescan'), 75)
+        result['result'] = 'passed'
+        log(f'PASS: PCIe ready; direct={result["direct"]}; recovery={result["recovery"]}')
+    finally:
+        (logs / 'recovery.json').write_text(json.dumps(result, indent=2) + '\n')
+        summary = os.environ.get('GITHUB_STEP_SUMMARY')
+        if summary:
+            with open(summary, 'a') as stream:
+                stream.write(f'PCIe: {result["result"]}; direct: {result["direct"]}; '
+                             f'recovery: {result["recovery"]}\n')
 
 
 def hardware_test_main():
@@ -342,12 +381,14 @@ def main():
     bundle = commands.add_parser('verify-bundle', help='Verify local producer bundle')
     bundle.add_argument('directory', type=Path)
     bundle.add_argument('--source-sha', required=True)
-    load = commands.add_parser('load', help='Program FPGA using Vivado Lab')
-    load.add_argument('bundle', type=Path)
-    load.add_argument('--source-sha', required=True)
-    load.add_argument('--bin-sha256', required=True)
-    load.add_argument('--program-mode', choices=['sram', 'flash'], default='sram',
-                      help='flash erases/programs/verifies configuration memory and boots from it')
+    for name, help_text in [('load', 'Program FPGA using Vivado Lab'),
+                            ('pcie-ready', 'Validate PCIe with one power-cycle fallback')]:
+        command = commands.add_parser(name, help=help_text)
+        command.add_argument('bundle', type=Path)
+        command.add_argument('--source-sha', required=True)
+        command.add_argument('--bin-sha256', required=True)
+        command.add_argument('--program-mode', choices=['sram', 'flash'], default='sram',
+                             help='flash erases/programs/verifies configuration memory and boots from it')
     args = parser.parse_args()
     if args.command == 'smoke':
         smoke_main(args)
@@ -355,6 +396,8 @@ def main():
         shutdown_main()
     elif args.command == 'hardware-test':
         hardware_test_main()
+    elif args.command == 'pcie-ready':
+        pcie_ready_main(args)
     elif args.command == 'verify-bundle':
         verify(args.directory, args.source_sha)
     else:
