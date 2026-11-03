@@ -321,13 +321,11 @@ def load_main(args):
             run_logged(dut_command(remote, 'prepare'), 30)
             run_logged(program_command(lab, 'program', bundle, logs, args.program_mode),
                        600 if args.program_mode == 'flash' else 180)
-            if args.program_mode == 'sram':
-                time.sleep(3)
-                run_logged(dut_command(remote, 'rescan'), 45)
-        if args.program_mode == 'flash':
-            log('PASS: Flash programmed and verified; PCIe enumeration will occur during cold boot')
-        else:
-            log('PASS: SRAM programming and FPGA PCIe enumeration')
+            # Flash mode boots the FPGA from the newly verified image via JTAG.
+            # Re-enumerate the removed PCIe endpoint without rebooting DUT B.
+            time.sleep(3)
+            run_logged(dut_command(remote, 'rescan'), 45)
+        log(f'PASS: {args.program_mode.upper()} programming and FPGA PCIe enumeration without DUT reboot')
     finally:
         controller.close()
 

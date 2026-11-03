@@ -1,6 +1,6 @@
 # FPGA testbench CI
 
-- Job order: build-sim, implementation, bitstream, power-on, load-bitstream, cold-boot, hardware-test, power-off.
+- Job order: build-sim, implementation, bitstream, power-on, load-bitstream, hardware-test, power-off.
 - `ci/testbench.py`: A controls Arduino, SSH, deployment, Vivado Lab and log collection.
 - `ci/dut.py`: B handles PCIe and UART.
 - `ci/hardware-test.sh`: B builds components, loads firmware/module, runs tests and cleans up.
@@ -14,7 +14,6 @@
 ```bash
 python3 ci/testbench.py smoke --power-action on
 bash ci/load-bitstream.sh BUNDLE --source-sha SHA --bin-sha256 HASH --program-mode flash
-python3 ci/testbench.py cold-boot
 python3 ci/testbench.py hardware-test
 python3 ci/testbench.py shutdown
 ```
@@ -43,14 +42,12 @@ sudo apt-get install build-essential cmake clang-18 llvm-18-dev zlib1g-dev libzs
 ## Behavior
 
 - This experiment pins hardware to `fbaf5ac`, before system CSR and the BAR0 GPC alias.
-- CI always writes and verifies Flash, then shuts down B, waits 5 seconds and powers it on again.
-- A new Linux boot ID is checked before hardware tests. PCIe is enumerated during boot.
+- CI writes and verifies Flash, boots the FPGA via JTAG and rescans PCIe before hardware tests. B stays powered on.
 - Direct PCIe CSR dumps are disabled for this older hardware; UART diagnostics remain.
 - SRAM programming is lost when the FPGA loses power. Flash boot requires matching board jumpers.
 - Only `top.bin` is uploaded to GitHub. Its checksum is checked before programming.
 - Local logs: `/home/github-runner/ci-artifacts/OWNER/REPO/RUN/ATTEMPT/KIND`.
 - Hardware test logs include UART, step logs and `dut-results.tar.gz`.
-- Cold-boot logs are retained under the `cold-boot` artifact directory.
 - In `gpu` mode, B first runs direct ISA store/copy/register/rs1-add tests, then the four OpenCL minimal cases and larger tests.
 - Direct ISA logs are named `isa-store`, `isa-copy`, `isa-register` and `isa-rs1-add`.
 - Minimal test logs are named `minimal-constant`, `minimal-scalar`, `minimal-copy` and `minimal-thread-id`.
@@ -61,12 +58,12 @@ sudo apt-get install build-essential cmake clang-18 llvm-18-dev zlib1g-dev libzs
 L2 isolation mode
 
 1. Select `hardware_mode: l2` manually in Run workflow to run isolation tests.
-2. CI builds the diagnostic bitstream, programs Flash and cold-boots B as usual.
+2. CI builds the diagnostic bitstream, programs Flash and rescans PCIe without rebooting B.
 3. B builds/loads only the driver and runs `test_l2_memory` for all six paths, then `test_vrf`; no firmware or OpenCL kernel is used.
 
 - Paths: direct L2, L1/L2, then LSU/L1/L2 with uniform, paired, lane-0-only and lane-1-only operands. Host verifies DDR `0x1000-0x1FFF` and both guard pages via DMA.
 - Inspect `<path>-memory.log` and `<path>_memory_cpu.bin` / `<path>_memory_gpu.bin`; first L1/L2/AXI addresses are printed in Actions. All six cases and the VRF test report before the job fails.
-- Push builds and Run workflow default to `gpu`: build the full GPU bitstream, program Flash, cold-boot B, then run ISA, OpenCL minimal and larger tests. A minimal-test failure skips larger tests.
+- Push builds and Run workflow default to `gpu`: build the full GPU bitstream, program Flash, rescan PCIe, then run ISA, OpenCL minimal and larger tests. A minimal-test failure skips larger tests.
 
 - In the same `hardware-test` job, `vrf-registers.log` contains both VRF read-port samples and comparisons across all warps/registers, lane masks and operand metadata.
 - VRF testing uses BAR0 snapshots directly and bypasses instruction fetch, ALU, scheduler and DDR.

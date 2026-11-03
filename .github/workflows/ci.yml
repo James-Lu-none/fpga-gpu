@@ -182,22 +182,8 @@ jobs:
       #     name: testbench-loading-${{ github.run_id }}-${{ github.run_attempt }}
       #     path: artifacts/testbench/
       #     retention-days: 7
-  cold-boot:
-    needs: load-bitstream
-    runs-on: [self-hosted, testbench]
-    timeout-minutes: 8
-    steps:
-      - uses: actions/checkout@v4
-      - name: Shut down DUT B, power on again and wait for SSH
-        run: |
-          mkdir -p artifacts/cold-boot
-          set -o pipefail
-          python3 -u ci/testbench.py cold-boot 2>&1 | tee artifacts/cold-boot/power.log
-      - name: Preserve cold-boot diagnostics locally
-        if: always()
-        run: bash ci/local-artifacts.sh save cold-boot
   hardware-test:
-    needs: cold-boot
+    needs: load-bitstream
     runs-on: [self-hosted, testbench]
     timeout-minutes: 35
     steps:
@@ -213,7 +199,7 @@ jobs:
         if: always()
         run: bash ci/local-artifacts.sh save hardware-test
   power-off:
-    needs: [power-on, load-bitstream, cold-boot, hardware-test]
+    needs: [power-on, load-bitstream, hardware-test]
     if: ${{ always() && needs.power-on.result != 'skipped' }}
     runs-on: [self-hosted, testbench]
     timeout-minutes: 5
