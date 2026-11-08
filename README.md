@@ -12,6 +12,10 @@ git submodule update --init --recursive
 
 ## Build & Quick Start Guide
 
+ASIC physical-design exercises live in [asic-gpu](asic-gpu/README.md), a sibling
+submodule that reads RTL from `fpga-gpu-hardware`. Its constraints, ORFS/OpenRAM
+flows and generated outputs are separate from the FPGA implementation flow.
+
 ### 1. LLVM Compiler Toolchain Build
 
 ```bash

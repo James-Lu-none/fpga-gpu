@@ -10,3 +10,6 @@
 [submodule "fpga-gpu-compiler"]
 	path = fpga-gpu-compiler
 	url = https://github.com/James-Lu-none/fpga-gpu-compiler
+[submodule "asic-gpu"]
+	path = asic-gpu
+	url = https://github.com/James-Lu-none/asic-gpu
