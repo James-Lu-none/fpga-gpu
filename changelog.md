@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-11-10: FPGA Synthesis & Resource Optimization (Hierarchical Utilization Reporting & Lane Scaling)
+
+### Summary of Changes
+1. **Implementation Script Enhancement ([`implement.tcl`](file:///home/user/workspace/fpga-gpu/fpga-gpu-hardware/implement.tcl))**:
+   - Added immediate export of hierarchical resource utilization (`synth_utilization_hierarchical.rpt`) directly after `synth_1` completes. This ensures that module-level breakdowns (LUT, FF, BRAM, DSP per SM, SP, and unit) are captured and saved as artifacts even if implementation or routing fails downstream.
+   - Added `catch` block on `impl_1` failure to dump `impl_failed_utilization.rpt` if placement got far enough to provide placement diagnostics.
+2. **Hardware Configuration Scaling for `xc7a200t` 
+   - Scaled `NUM_LANES` from 32 to 16.
+   - Prevents the hard physical resource overflow on `xc7a200t`:
+     - DSP consumption reduced from 768 DSPs (100% full chip saturation, exceeding 740 available DSPs) to **384 DSPs** (~51.8% utilization).
+     - VRF BRAM consumption reduced from 512 BRAM18 (70.5%) to **256 BRAM18** (~35.0% utilization).
+     - Slice LUT usage reduced from 90.23% to ~45% utilization, resolving the `Place 30-487` slice packing failure.
+3. **Verification**:
+   - `make lint` passed with zero errors and zero warnings.
+   - `make clean check` in Verilator passed 100% across all unit tests and all 6 OpenCL workloads.
+
+---
+
 ## 2026-11-10: Complete NZP Elimination & Direct Register-Based Branching (`BR R<rd>, target`)
 
 ### Outcome and Architectural Significance
