@@ -6,7 +6,7 @@ description: |
 
 engine:
   id: codex
-  model: gpt-4o-mini
+  model: gpt-4o
 
 on:
   workflow_dispatch:
