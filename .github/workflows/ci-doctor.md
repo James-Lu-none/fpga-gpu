@@ -4,6 +4,12 @@ description: |
   and repository context, and reports actionable remediation while consolidating
   duplicate failures.
 
+engine:
+  id: codex
+  model-routing:
+    goal: cost
+    mode: auto
+
 on:
   workflow_run:
     workflows: ["FPGA-GPU CI"]
