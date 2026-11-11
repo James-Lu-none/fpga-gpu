@@ -28,6 +28,10 @@ permissions:
   issues: read
   pull-requests: read
 
+tools:
+  github:
+    toolsets: [repos, issues, pull_requests, actions]
+
 concurrency:
   job-discriminator: ${{ github.run_id }}
 
