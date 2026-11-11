@@ -6,7 +6,7 @@ description: |
 
 engine:
   id: codex
-  model: gpt-5-mini
+  model: gpt-4o
 
 on:
   workflow_dispatch:
@@ -62,9 +62,13 @@ likely root cause and give maintainers specific, evidence-backed next steps.
 - **Run URL**: ${{ github.event.workflow_run.html_url }}
 - **Head SHA**: ${{ github.event.workflow_run.head_sha }}
 
-### Dispatch Handling:
-- If this workflow is executed via `workflow_dispatch` and `Workflow run ID` is empty or not provided directly by `github.event.workflow_run.id`, use GitHub MCP tools or `gh run list --workflow="FPGA-GPU CI" --status=failure --limit=1` to find the most recent failed run of "FPGA-GPU CI", and investigate that run.
-- If a specific run ID is provided (e.g., `42964576058`), investigate that run directly.
+### Dispatch & Log Retrieval Instructions:
+- Retrieve job logs by calling the MCP tool `get_job_logs` directly with the target run ID (`run_id`: target run ID, `failed_only`: true).
+- If you need to list jobs or artifacts, call the MCP tools `actions_list` or `actions_get`.
+- If `Workflow run ID` is not specified, use `actions_list` to find the most recent failed run of "FPGA-GPU CI".
+- If a specific run ID is provided (e.g., `42964576058`), fetch its logs directly via `get_job_logs`.
+- Do NOT use the `gh` CLI in bash and do NOT import MCP packages in Python; call the declared MCP tools (`get_job_logs`, `actions_list`, `actions_get`, `create_issue`, `create_pull_request`) directly.
+- After completing triage, you MUST open a GitHub Issue using the `create_issue` safe-output tool detailing the root cause, timing slack, affected files, and recommended remediation. Do not finish with `noop` when a failure has been analyzed.
 
 ## Investigation protocol
 
