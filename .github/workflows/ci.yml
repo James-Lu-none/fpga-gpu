@@ -39,13 +39,15 @@ jobs:
             --env HOME=/tmp --env CTEST_OUTPUT_ON_FAILURE=1 \
             --mount "type=bind,source=$GITHUB_WORKSPACE,target=/workspace" \
             --workdir /workspace fpgagpu-ci:local bash ci/software.sh
-      # Reports and diagnostics are retained locally only.
-      # - uses: actions/upload-artifact@v4
-      #   if: always()
-      #   with:
-      #     name: software-evidence-${{ github.run_attempt }}
-      #     path: artifacts/software/
-      #     retention-days: 7
+      # Reports and diagnostics are retained locally only during normal runs.
+      # Upload lightweight diagnostic reports only on failure for ci-doctor agent triage.
+      - name: Upload software test failure reports
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: software-failure-reports-${{ github.run_attempt }}
+          path: artifacts/software/
+          retention-days: 7
       - name: Preserve software on runner
         if: always()
         run: bash ci/local-artifacts.sh save software
@@ -71,21 +73,17 @@ jobs:
         env:
           VIVADO_SETTINGS: /opt/Xilinx/2026.1/Vivado/settings64.sh
         run: bash ci/vivado.sh implementation
-      # Reports and diagnostics are retained locally only.
-      # - uses: actions/upload-artifact@v4
-      #   if: always()
-      #   with:
-      #     name: vivado-implementation-${{ github.run_attempt }}
-      #     path: |
-      #       artifacts/vivado/*.rpt
-      #       artifacts/vivado/*.log
-      #       artifacts/vivado/*.jou
-      #       artifacts/vivado/*.txt
-      #       artifacts/vivado/*.sha256
-      #       artifacts/vivado/routed.dcp
-      #       artifacts/vivado/modules/
-      #       artifacts/vivado/run-logs/
-      #     retention-days: 7
+      # Upload lightweight diagnostic reports on failure for ci-doctor agent triage (excludes heavy routed.dcp).
+      - name: Upload Vivado failure reports
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: vivado-failure-reports-${{ github.run_attempt }}
+          path: |
+            artifacts/vivado/*.rpt
+            artifacts/vivado/*.log
+            artifacts/vivado/*.txt
+          retention-days: 7
       - name: Preserve vivado on runner
         if: always()
         run: bash ci/local-artifacts.sh save vivado
@@ -221,6 +219,13 @@ jobs:
           mkdir -p artifacts/hardware-test
           set -o pipefail
           python3 -u ci/testbench.py hardware-test 2>&1 | tee artifacts/hardware-test/testing.log
+      - name: Upload hardware test failure reports
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: hardware-test-failure-reports-${{ github.run_attempt }}
+          path: artifacts/hardware-test/
+          retention-days: 7
       - name: Preserve hardware test diagnostics locally
         if: always()
         run: bash ci/local-artifacts.sh save hardware-test
