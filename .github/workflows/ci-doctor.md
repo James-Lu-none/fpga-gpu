@@ -6,23 +6,30 @@ description: |
 
 engine:
   id: codex
-  model-routing:
-    goal: cost
-    mode: auto
+  model: gpt-5-mini
 
 on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Target CI workflow run ID to diagnose (leave empty for latest failure)"
+        required: false
+        default: ""
   workflow_run:
     workflows: ["FPGA-GPU CI"]
     types: [completed]
     branches: [master, main]
 
-if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'failure' }}
 
 permissions:
   actions: read
   contents: read
   issues: read
   pull-requests: read
+
+concurrency:
+  job-discriminator: ${{ github.run_id }}
 
 safe-outputs:
   create-issue:
@@ -46,9 +53,14 @@ likely root cause and give maintainers specific, evidence-backed next steps.
 ## Run context
 
 - **Repository**: ${{ github.repository }}
-- **Workflow run**: ${{ github.event.workflow_run.id }}
+- **Trigger**: ${{ github.event_name }}
+- **Workflow run ID**: ${{ github.event.workflow_run.id || github.event.inputs.run_id || '(manual dispatch - auto-detect latest failure)' }}
 - **Run URL**: ${{ github.event.workflow_run.html_url }}
 - **Head SHA**: ${{ github.event.workflow_run.head_sha }}
+
+### Dispatch Handling:
+- If this workflow is executed via `workflow_dispatch` and `Workflow run ID` is empty or not provided directly by `github.event.workflow_run.id`, use GitHub MCP tools or `gh run list --workflow="FPGA-GPU CI" --status=failure --limit=1` to find the most recent failed run of "FPGA-GPU CI", and investigate that run.
+- If a specific run ID is provided (e.g., `42964576058`), investigate that run directly.
 
 ## Investigation protocol
 
