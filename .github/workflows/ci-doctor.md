@@ -6,7 +6,7 @@ description: |
 
 engine:
   id: codex
-  model: gpt-4o
+  model: gpt-4o-mini
 
 on:
   workflow_dispatch:
@@ -16,7 +16,7 @@ on:
         required: false
         default: ""
   workflow_run:
-    workflows: ["FPGA-GPU CI"]
+    workflows: ["FPGA-GPU CI", "ASIC-GPU CI"]
     types: [completed]
     branches: [master, main]
 
@@ -29,13 +29,17 @@ permissions:
   pull-requests: read
 
 tools:
+  bash: false
+  cli-proxy: false
   github:
     toolsets: [repos, issues, pull_requests, actions]
+    min-integrity: none
 
 concurrency:
   job-discriminator: ${{ github.run_id }}
 
 safe-outputs:
+  report-failure-as-issue: false
   create-issue:
     title-prefix: "[CI failure] "
   add-comment:
