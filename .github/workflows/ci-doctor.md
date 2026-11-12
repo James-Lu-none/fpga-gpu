@@ -31,6 +31,7 @@ permissions:
 tools:
   bash: false
   cli-proxy: false
+  edit: true
   github:
     toolsets: [repos, issues, pull_requests, actions]
     min-integrity: none
@@ -97,11 +98,18 @@ Classify the failure as one or more of:
 - runner, network, or resource failure
 - flaky or timing-sensitive behavior
 
-#### Domain-Specific Guidance for FPGA-GPU CI:
+#### Domain-Specific Guidance for FPGA-GPU and ASIC-GPU CI:
 - **`build-sim`**: Inspect Verilator compile/lint errors, simulation assertions, and OpenCL test outputs.
-- **`implementation`**:
-  - Inspect `artifacts/vivado/timing.rpt`: Identify Worst Negative Slack (WNS). Check whether the failing path is a Setup violation (long combinational logic levels across module boundaries) or a Recovery violation (high-fanout asynchronous reset nets driving data registers).
-  - Inspect `artifacts/vivado/utilization.rpt`: Check Slice, LUT, FF, BRAM utilization.
+- **`implementation` (Vivado)**:
+  - **CRITICAL**: Do NOT mistake `CRITICAL WARNING: [Vivado 12-4439] The number of objects collected by the 'from' option of 'report_timing' is very large` for the root cause! This warning indicates that `report_timing` was run across a large endpoint collection, which impacts reporting time, but is NOT what halts the build.
+  - Look for the true terminal failure:
+    1. Search for `error "$delay_type timing failed"`: Indicates negative slack (WNS < 0). Check `timing.rpt` or the setup/hold failure message to identify the failing clock domain, Startpoint, Endpoint, and Slack value.
+    2. Search for `error "DRC errors found"`: Indicates unroutable or rule-violating physical design constraints.
+    3. Tool crashes or OOMs during `opt_design`, `place_design`, or `route_design`.
+- **`ASIC-GPU CI` (`elaborate-check`, `mul32-reference-flow`, `sp-synthesis-flow`)**:
+  - Inspect Yosys synthesis logs (`synth.log`) for unmapped primitives or syntax errors.
+  - Inspect OpenROAD timing reports (`finish.rpt`) for setup/hold slack violations and density violations.
+  - Inspect KLayout DRC logs (`drc.log`) for geometry violations and KLayout LVS logs (`lvs.log`) for netlist mismatches.
 - **`testbench` jobs (`power-on`, `load-bitstream`, `pcie-ready`, `hardware-test`)**:
   - Inspect DUT B power telemetry, bitstream checksum verification, and PCIe link enumeration logs.
 
@@ -132,11 +140,22 @@ Provide:
 Prefer the smallest recommendation supported by the evidence. Do not propose
 unrelated cleanup.
 
-If the failure has an identifiable, low-risk code fix (such as an obvious RTL logic bug, pipelining register insertion, or syntax fix), modify the files directly in the workspace and invoke `create-pull-request` to submit an automated Draft PR for human review.
+### 4. Remediation & Action Decision Rule
+
+- **When to create a Draft Pull Request (`create_pull_request`)**:
+  - If the failure is in scripts (Tcl, Bash, Python), workflow YAMLs, build flags, environment setup, or easily identifiable code typos:
+    1. Use the `edit` tool to modify the relevant file(s) in the workspace.
+    2. Invoke `create_pull_request` to submit a Draft PR for maintainer review, describing the change and linking the failed CI run.
+    3. When a Pull Request is submitted, you do NOT need to create an issue.
+
+- **When to open an Issue (`create_issue`)**:
+  - If the failure is a complex **Hardware Timing Violation (Setup/Hold Slack < 0)**, place-and-route congestion, or circuit logic bug:
+    - Do NOT blindly rewrite complex RTL pipelines.
+    - Instead, open an Issue using `create_issue` detailing the failing clock path (Startpoint, Endpoint, Slack value, logic levels) and suggesting concrete architectural fixes (e.g. pipeline register insertion, constraint tuning).
 
 ## Reporting
 
-If you submitted a pull request with `create-pull-request`, you do not need to create an issue.
+If you submitted a pull request with `create_pull_request`, do not create an issue.
 
 If an open issue already reports the same root cause, add one comment with the
 new run link, evidence, and any materially new findings. Do not create another
