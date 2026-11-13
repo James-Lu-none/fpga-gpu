@@ -225,7 +225,7 @@ def find_vivado_lab():
 
 
 def program_command(lab, action, bundle, logs, mode):
-    return [lab, '-mode', 'batch', '-notrace', '-source', str(HERE.parent / 'fpga-gpu-hardware' / 'program_fpga.tcl'),
+    return [lab, '-mode', 'batch', '-notrace', '-source', str(HERE.parent / 'fpga-gpu-hardware' / 'scripts' / 'program_fpga.tcl'),
             '-log', str(logs / f'lab-{action}.log'),
             '-journal', str(logs / f'lab-{action}.jou'),
             '-tclargs', action, str(bundle / 'top.bin'), mode]

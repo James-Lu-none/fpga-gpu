@@ -42,7 +42,7 @@ case "$mode" in
     implementation) tcl_script=implement.tcl ;;
     bitstream) tcl_script=write_bitstream.tcl ;;
 esac
-vivado -mode batch -notrace -source "fpga-gpu-hardware/$tcl_script" \
+vivado -mode batch -notrace -source "fpga-gpu-hardware/scripts/$tcl_script" \
     -log "$CI_OUTPUT_DIR/$mode.log" -journal "$CI_OUTPUT_DIR/$mode.jou"
 if [[ $mode == implementation ]]; then
     (cd "$CI_OUTPUT_DIR" && sha256sum routed.dcp > checkpoint.sha256)

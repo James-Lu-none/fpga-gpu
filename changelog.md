@@ -3,7 +3,7 @@
 ## 2026-11-10: FPGA Synthesis & Resource Optimization (Hierarchical Utilization Reporting & Lane Scaling)
 
 ### Summary of Changes
-1. **Implementation Script Enhancement ([`implement.tcl`](file:///home/user/workspace/fpga-gpu/fpga-gpu-hardware/implement.tcl))**:
+1. **Implementation Script Enhancement ([`implement.tcl`](fpga-gpu-hardware/scripts/implement.tcl))**:
    - Added immediate export of hierarchical resource utilization (`synth_utilization_hierarchical.rpt`) directly after `synth_1` completes. This ensures that module-level breakdowns (LUT, FF, BRAM, DSP per SM, SP, and unit) are captured and saved as artifacts even if implementation or routing fails downstream.
    - Added `catch` block on `impl_1` failure to dump `impl_failed_utilization.rpt` if placement got far enough to provide placement diagnostics.
 2. **Hardware Configuration Scaling for `xc7a200t` 
