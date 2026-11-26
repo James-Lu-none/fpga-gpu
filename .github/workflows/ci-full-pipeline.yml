@@ -1,22 +1,28 @@
-name: FPGA-GPU CI
+name: Full FPGA-GPU Pipeline
+
 on:
   push:
+    branches:
+      - full-ci
+      - 'release/**'
   workflow_dispatch:
     inputs:
       program_mode:
         description: 'FPGA target: SRAM or persistent configuration Flash'
         type: choice
-        options: [sram, flash]
+        options: [flash, sram]
         default: flash
+
 permissions:
   contents: read
+
 # Hold the DUT reservation across power-on, loading and power-off jobs.
 concurrency:
   group: fpga-testbench
   cancel-in-progress: false
+
 jobs:
   build-sim:
-    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: [self-hosted, Linux, X64, vivado]
     timeout-minutes: 60
     concurrency:
@@ -39,8 +45,6 @@ jobs:
             --env HOME=/tmp --env CTEST_OUTPUT_ON_FAILURE=1 \
             --mount "type=bind,source=$GITHUB_WORKSPACE,target=/workspace" \
             --workdir /workspace fpgagpu-ci:local bash ci/software.sh
-      # Reports and diagnostics are retained locally only during normal runs.
-      # Upload lightweight diagnostic reports only on failure for ci-doctor agent triage.
       - name: Upload software test failure reports
         uses: actions/upload-artifact@v4
         if: failure()
@@ -51,12 +55,11 @@ jobs:
       - name: Preserve software on runner
         if: always()
         run: bash ci/local-artifacts.sh save software
+
   implementation:
     outputs:
       artifact_attempt: ${{ steps.provenance.outputs.attempt }}
     needs: build-sim
-    # Persistent self-hosted runner only executes the repository's default branch.
-    if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: [self-hosted, Linux, X64, vivado]
     timeout-minutes: 180
     concurrency:
@@ -73,7 +76,6 @@ jobs:
         env:
           VIVADO_SETTINGS: /opt/Xilinx/2026.1/Vivado/settings64.sh
         run: bash ci/vivado.sh implementation
-      # Upload lightweight diagnostic reports on failure for ci-doctor agent triage (excludes heavy routed.dcp).
       - name: Upload Vivado failure reports
         uses: actions/upload-artifact@v4
         if: failure()
@@ -87,6 +89,7 @@ jobs:
       - name: Preserve vivado on runner
         if: always()
         run: bash ci/local-artifacts.sh save vivado
+
   bitstream:
     outputs:
       artifact_id: ${{ steps.published.outputs.artifact-id }}
@@ -132,6 +135,7 @@ jobs:
           path: artifacts/bitstream/top.bin
           retention-days: 7
           if-no-files-found: error
+
   power-on:
     needs: bitstream
     runs-on: [self-hosted, testbench]
@@ -146,6 +150,7 @@ jobs:
       - name: Preserve power-on diagnostics locally
         if: always()
         run: bash ci/local-artifacts.sh save power-on
+
   load-bitstream:
     needs: [bitstream, power-on]
     runs-on: [self-hosted, testbench]
@@ -171,13 +176,7 @@ jobs:
       - name: Preserve loading diagnostics locally
         if: always()
         run: bash ci/local-artifacts.sh save testbench
-      # Reports and diagnostics are retained locally only.
-      # - uses: actions/upload-artifact@v4
-      #   if: always()
-      #   with:
-      #     name: testbench-loading-${{ github.run_id }}-${{ github.run_attempt }}
-      #     path: artifacts/testbench/
-      #     retention-days: 7
+
   pcie-ready:
     needs: [bitstream, load-bitstream]
     runs-on: [self-hosted, testbench]
@@ -206,6 +205,7 @@ jobs:
       - name: Preserve PCIe recovery diagnostics locally
         if: always()
         run: bash ci/local-artifacts.sh save pcie-ready
+
   hardware-test:
     needs: pcie-ready
     runs-on: [self-hosted, testbench]
@@ -229,6 +229,7 @@ jobs:
       - name: Preserve hardware test diagnostics locally
         if: always()
         run: bash ci/local-artifacts.sh save hardware-test
+
   power-off:
     needs: [power-on, load-bitstream, pcie-ready, hardware-test]
     if: ${{ always() && needs.power-on.result != 'skipped' }}

@@ -1,0 +1,192 @@
+name: Fast Hardware Test (Fixed Bitstream)
+
+on:
+  push:
+    branches:
+      - hw-test
+      - 'test/hw**'
+  workflow_dispatch:
+    inputs:
+      bitstream_run_id:
+        description: 'Target Run ID for bitstream'
+        type: string
+        default: '45736258986'
+      bitstream_attempt:
+        description: 'Target Run Attempt'
+        type: string
+        default: '1'
+      program_mode:
+        description: 'FPGA target: SRAM or persistent configuration Flash'
+        type: choice
+        options: [flash, sram]
+        default: flash
+
+permissions:
+  contents: read
+  actions: read
+
+# Hold the DUT reservation across power-on, loading and power-off jobs.
+concurrency:
+  group: fpga-testbench
+  cancel-in-progress: false
+
+jobs:
+  prepare-bitstream:
+    runs-on: [self-hosted, Linux, X64, vivado]
+    timeout-minutes: 10
+    outputs:
+      artifact_id: ${{ steps.published.outputs.artifact-id }}
+      bin_sha256: ${{ steps.digest.outputs.bin_sha256 }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore fixed bitstream from local runner store
+        id: restore-local
+        continue-on-error: true
+        env:
+          SOURCE_RUN_ID: ${{ inputs.bitstream_run_id || '45736258986' }}
+          SOURCE_RUN_ATTEMPT: ${{ inputs.bitstream_attempt || '1' }}
+        run: |
+          mkdir -p artifacts
+          rm -rf artifacts/bitstream
+          bash ci/local-artifacts.sh restore bitstream
+
+      - name: Download bitstream from GitHub Actions (fallback)
+        if: steps.restore-local.outcome != 'success'
+        uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ inputs.bitstream_run_id || '45736258986' }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: artifacts/bitstream
+          merge-multiple: true
+
+      - name: Verify bitstream top.bin exists
+        run: |
+          [[ -f artifacts/bitstream/top.bin && -s artifacts/bitstream/top.bin ]] || {
+            echo "ERROR: artifacts/bitstream/top.bin is missing or empty!" >&2
+            exit 1
+          }
+          echo "PASS: top.bin is present ($(stat -c%s artifacts/bitstream/top.bin) bytes)"
+
+      - name: Record binary checksum for downstream validation
+        id: digest
+        run: |
+          digest=$(sha256sum artifacts/bitstream/top.bin)
+          echo "bin_sha256=${digest%% *}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        id: published
+        with:
+          name: fpga-bitstream-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/bitstream/top.bin
+          retention-days: 7
+          if-no-files-found: error
+
+  power-on:
+    needs: prepare-bitstream
+    runs-on: [self-hosted, testbench]
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Power on DUT B and wait for SSH
+        run: |
+          mkdir -p artifacts/power-on
+          set -o pipefail
+          python3 -u ci/testbench.py smoke --power-action on 2>&1 | tee artifacts/power-on/power.log
+      - name: Preserve power-on diagnostics locally
+        if: always()
+        run: bash ci/local-artifacts.sh save power-on
+
+  load-bitstream:
+    needs: [prepare-bitstream, power-on]
+    runs-on: [self-hosted, testbench]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.prepare-bitstream.outputs.artifact_id }}
+          path: artifacts/bitstream
+          merge-multiple: true
+      - name: Verify and program FPGA
+        env:
+          VIVADO_LAB_SETTINGS: /opt/Xilinx/2026.1/Vivado_Lab/settings64.sh
+          FPGA_PROGRAM_MODE: ${{ inputs.program_mode || 'flash' }}
+          EXPECTED_BIN_SHA256: ${{ needs.prepare-bitstream.outputs.bin_sha256 }}
+        run: |
+          mkdir -p artifacts/testbench
+          set -o pipefail
+          bash ci/load-bitstream.sh artifacts/bitstream --source-sha "$GITHUB_SHA" --bin-sha256 "$EXPECTED_BIN_SHA256" --program-mode "$FPGA_PROGRAM_MODE" 2>&1 | tee artifacts/testbench/loading.log
+      - name: Preserve loading diagnostics locally
+        if: always()
+        run: bash ci/local-artifacts.sh save testbench
+
+  pcie-ready:
+    needs: [prepare-bitstream, load-bitstream]
+    runs-on: [self-hosted, testbench]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.prepare-bitstream.outputs.artifact_id }}
+          path: artifacts/bitstream
+          merge-multiple: true
+      - name: Rescan and verify PCIe with one power-cycle fallback
+        env:
+          VIVADO_LAB_SETTINGS: /opt/Xilinx/2026.1/Vivado_Lab/settings64.sh
+          FPGA_PROGRAM_MODE: ${{ inputs.program_mode || 'flash' }}
+          EXPECTED_BIN_SHA256: ${{ needs.prepare-bitstream.outputs.bin_sha256 }}
+        run: |
+          mkdir -p artifacts/pcie-ready
+          set -o pipefail
+          set +u
+          source "$VIVADO_LAB_SETTINGS"
+          set -u
+          python3 -u ci/testbench.py pcie-ready artifacts/bitstream --source-sha "$GITHUB_SHA" --bin-sha256 "$EXPECTED_BIN_SHA256" --program-mode "$FPGA_PROGRAM_MODE" 2>&1 | tee artifacts/pcie-ready/pcie.log
+      - name: Preserve PCIe recovery diagnostics locally
+        if: always()
+        run: bash ci/local-artifacts.sh save pcie-ready
+
+  hardware-test:
+    needs: pcie-ready
+    runs-on: [self-hosted, testbench]
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Build driver and run hardware tests on DUT B
+        run: |
+          mkdir -p artifacts/hardware-test
+          set -o pipefail
+          python3 -u ci/testbench.py hardware-test 2>&1 | tee artifacts/hardware-test/testing.log
+      - name: Upload hardware test failure reports
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: hardware-test-failure-reports-${{ github.run_attempt }}
+          path: artifacts/hardware-test/
+          retention-days: 7
+      - name: Preserve hardware test diagnostics locally
+        if: always()
+        run: bash ci/local-artifacts.sh save hardware-test
+
+  power-off:
+    needs: [power-on, load-bitstream, pcie-ready, hardware-test]
+    if: ${{ always() && needs.power-on.result != 'skipped' }}
+    runs-on: [self-hosted, testbench]
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shut down DUT B and verify power is OFF
+        run: |
+          mkdir -p artifacts/power-off
+          set -o pipefail
+          python3 -u ci/testbench.py shutdown 2>&1 | tee artifacts/power-off/power.log
+      - name: Preserve power-off diagnostics locally
+        if: always()
+        run: bash ci/local-artifacts.sh save power-off

@@ -1,0 +1,276 @@
+name: Full Pipeline + Agent Workflow
+
+on:
+  push:
+    branches:
+      - agent-flow
+      - production
+  workflow_dispatch:
+    inputs:
+      program_mode:
+        description: 'FPGA target: SRAM or persistent configuration Flash'
+        type: choice
+        options: [flash, sram]
+        default: flash
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+# Hold the DUT reservation across power-on, loading and power-off jobs.
+concurrency:
+  group: fpga-testbench
+  cancel-in-progress: false
+
+jobs:
+  build-sim:
+    runs-on: [self-hosted, Linux, X64, vivado]
+    timeout-minutes: 60
+    concurrency:
+      group: vivado-software
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Build CI image locally
+        run: docker build --tag fpgagpu-ci:local --file ci/Dockerfile .
+      - name: Build and test inside Docker
+        run: |
+          mkdir -p artifacts/software
+          git rev-parse HEAD > artifacts/software/source-sha.txt
+          git submodule status --recursive > artifacts/software/submodules.txt
+          docker image inspect fpgagpu-ci:local --format '{{.Id}}' > artifacts/software/image-id.txt
+          docker run --rm --init \
+            --user "$(id -u):$(id -g)" \
+            --env HOME=/tmp --env CTEST_OUTPUT_ON_FAILURE=1 \
+            --mount "type=bind,source=$GITHUB_WORKSPACE,target=/workspace" \
+            --workdir /workspace fpgagpu-ci:local bash ci/software.sh
+      - name: Upload software test failure reports
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: software-failure-reports-${{ github.run_attempt }}
+          path: artifacts/software/
+          retention-days: 7
+      - name: Preserve software on runner
+        if: always()
+        run: bash ci/local-artifacts.sh save software
+
+  implementation:
+    outputs:
+      artifact_attempt: ${{ steps.provenance.outputs.attempt }}
+    needs: build-sim
+    runs-on: [self-hosted, Linux, X64, vivado]
+    timeout-minutes: 180
+    concurrency:
+      group: vivado-tool
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Record implementation artifact attempt
+        id: provenance
+        run: echo "attempt=$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - name: Run implementation and quality gates
+        env:
+          VIVADO_SETTINGS: /opt/Xilinx/2026.1/Vivado/settings64.sh
+        run: bash ci/vivado.sh implementation
+      - name: Upload Vivado failure reports
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: vivado-failure-reports-${{ github.run_attempt }}
+          path: |
+            artifacts/vivado/*.rpt
+            artifacts/vivado/*.log
+            artifacts/vivado/*.txt
+          retention-days: 7
+      - name: Preserve vivado on runner
+        if: always()
+        run: bash ci/local-artifacts.sh save vivado
+
+  bitstream:
+    outputs:
+      artifact_id: ${{ steps.published.outputs.artifact-id }}
+      bin_sha256: ${{ steps.digest.outputs.bin_sha256 }}
+    needs: implementation
+    runs-on: [self-hosted, Linux, X64, vivado]
+    timeout-minutes: 45
+    concurrency:
+      group: vivado-tool
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Restore implementation checkpoint
+        env:
+          SOURCE_RUN_ID: ${{ github.run_id }}
+          SOURCE_RUN_ATTEMPT: ${{ needs.implementation.outputs.artifact_attempt }}
+        run: bash ci/local-artifacts.sh restore vivado
+      - name: Generate bitstream from verified checkpoint
+        env:
+          VIVADO_SETTINGS: /opt/Xilinx/2026.1/Vivado/settings64.sh
+        run: bash ci/vivado.sh bitstream
+      - name: Preserve bitstream on runner
+        if: always()
+        run: |
+          mkdir -p artifacts/bitstream
+          if [ -d artifacts/vivado ]; then
+            find artifacts/vivado -maxdepth 1 -type f \( -name 'top.bit' -o -name 'top.bin' -o -name 'bitstream*' -o -name '*version.txt' -o -name 'source-sha.txt' -o -name 'submodules.txt' -o -name 'checkpoint.sha256' \) -exec cp {} artifacts/bitstream/ \;
+          fi
+          bash ci/local-artifacts.sh save bitstream
+      - name: Verify bitstream bundle for transfer
+        run: python3 ci/testbench.py verify-bundle artifacts/bitstream --source-sha "$GITHUB_SHA"
+      - name: Record binary checksum for downstream validation
+        id: digest
+        run: |
+          digest=$(sha256sum artifacts/bitstream/top.bin)
+          echo "bin_sha256=${digest%% *}" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        id: published
+        with:
+          name: fpga-bitstream-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/bitstream/top.bin
+          retention-days: 7
+          if-no-files-found: error
+
+  power-on:
+    needs: bitstream
+    runs-on: [self-hosted, testbench]
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Power on DUT B and wait for SSH
+        run: |
+          mkdir -p artifacts/power-on
+          set -o pipefail
+          python3 -u ci/testbench.py smoke --power-action on 2>&1 | tee artifacts/power-on/power.log
+      - name: Preserve power-on diagnostics locally
+        if: always()
+        run: bash ci/local-artifacts.sh save power-on
+
+  load-bitstream:
+    needs: [bitstream, power-on]
+    runs-on: [self-hosted, testbench]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.bitstream.outputs.artifact_id }}
+          path: artifacts/bitstream
+          merge-multiple: true
+      - name: Verify and program FPGA
+        env:
+          VIVADO_LAB_SETTINGS: /opt/Xilinx/2026.1/Vivado_Lab/settings64.sh
+          FPGA_PROGRAM_MODE: ${{ inputs.program_mode || 'flash' }}
+          EXPECTED_BIN_SHA256: ${{ needs.bitstream.outputs.bin_sha256 }}
+        run: |
+          mkdir -p artifacts/testbench
+          set -o pipefail
+          bash ci/load-bitstream.sh artifacts/bitstream --source-sha "$GITHUB_SHA" --bin-sha256 "$EXPECTED_BIN_SHA256" --program-mode "$FPGA_PROGRAM_MODE" 2>&1 | tee artifacts/testbench/loading.log
+      - name: Preserve loading diagnostics locally
+        if: always()
+        run: bash ci/local-artifacts.sh save testbench
+
+  pcie-ready:
+    needs: [bitstream, load-bitstream]
+    runs-on: [self-hosted, testbench]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.bitstream.outputs.artifact_id }}
+          path: artifacts/bitstream
+          merge-multiple: true
+      - name: Rescan and verify PCIe with one power-cycle fallback
+        env:
+          VIVADO_LAB_SETTINGS: /opt/Xilinx/2026.1/Vivado_Lab/settings64.sh
+          FPGA_PROGRAM_MODE: ${{ inputs.program_mode || 'flash' }}
+          EXPECTED_BIN_SHA256: ${{ needs.bitstream.outputs.bin_sha256 }}
+        run: |
+          mkdir -p artifacts/pcie-ready
+          set -o pipefail
+          set +u
+          source "$VIVADO_LAB_SETTINGS"
+          set -u
+          python3 -u ci/testbench.py pcie-ready artifacts/bitstream --source-sha "$GITHUB_SHA" --bin-sha256 "$EXPECTED_BIN_SHA256" --program-mode "$FPGA_PROGRAM_MODE" 2>&1 | tee artifacts/pcie-ready/pcie.log
+      - name: Preserve PCIe recovery diagnostics locally
+        if: always()
+        run: bash ci/local-artifacts.sh save pcie-ready
+
+  hardware-test:
+    needs: pcie-ready
+    runs-on: [self-hosted, testbench]
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Build driver and run hardware tests on DUT B
+        run: |
+          mkdir -p artifacts/hardware-test
+          set -o pipefail
+          python3 -u ci/testbench.py hardware-test 2>&1 | tee artifacts/hardware-test/testing.log
+      - name: Upload hardware test failure reports
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: hardware-test-failure-reports-${{ github.run_attempt }}
+          path: artifacts/hardware-test/
+          retention-days: 7
+      - name: Preserve hardware test diagnostics locally
+        if: always()
+        run: bash ci/local-artifacts.sh save hardware-test
+
+  power-off:
+    needs: [power-on, load-bitstream, pcie-ready, hardware-test]
+    if: ${{ always() && needs.power-on.result != 'skipped' }}
+    runs-on: [self-hosted, testbench]
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shut down DUT B and verify power is OFF
+        run: |
+          mkdir -p artifacts/power-off
+          set -o pipefail
+          python3 -u ci/testbench.py shutdown 2>&1 | tee artifacts/power-off/power.log
+      - name: Preserve power-off diagnostics locally
+        if: always()
+        run: bash ci/local-artifacts.sh save power-off
+
+  agent-workflow:
+    needs: [power-off, hardware-test]
+    if: always()
+    runs-on: [self-hosted, Linux, X64, vivado]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore test artifacts for Agent triage
+        id: restore-artifacts
+        continue-on-error: true
+        run: |
+          mkdir -p artifacts
+          bash ci/local-artifacts.sh restore hardware-test || true
+      - name: Generate Agent Summary and Triage Report
+        run: |
+          echo "### 🤖 GitHub Agent CI Triage Summary" >> $GITHUB_STEP_SUMMARY
+          echo "Commit: \`$GITHUB_SHA\`" >> $GITHUB_STEP_SUMMARY
+          echo "Hardware Test Result: **${{ needs.hardware-test.result }}**" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ needs.hardware-test.result }}" == "success" ]]; then
+            echo " All hardware verification passed on Artix-7 SIMT GPGPU Accelerator." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Hardware verification failure detected. Inspecting test logs..." >> $GITHUB_STEP_SUMMARY
+            if [[ -f artifacts/hardware-test/testing.log ]]; then
+              tail -n 30 artifacts/hardware-test/testing.log >> $GITHUB_STEP_SUMMARY
+            fi
+          fi
