@@ -16,7 +16,7 @@ on:
         required: false
         default: ""
   workflow_run:
-    workflows: ["FPGA-GPU CI", "ASIC-GPU CI"]
+    workflows: ["Full FPGA-GPU Pipeline"]
     types: [completed]
     branches: [master, main]
 
@@ -29,7 +29,8 @@ permissions:
   pull-requests: read
 
 tools:
-  bash: false
+  # Codex requires Bash for the safeoutputs CLI and local draft-PR preparation.
+  bash: ["*"]
   cli-proxy: false
   edit: true
   github:
@@ -67,13 +68,48 @@ likely root cause and give maintainers specific, evidence-backed next steps.
 - **Run URL**: ${{ github.event.workflow_run.html_url }}
 - **Head SHA**: ${{ github.event.workflow_run.head_sha }}
 
-### Dispatch & Log Retrieval Instructions:
-- Retrieve job logs by calling the MCP tool `get_job_logs` directly with the target run ID (`run_id`: target run ID, `failed_only`: true).
-- If you need to list jobs or artifacts, call the MCP tools `actions_list` or `actions_get`.
-- If `Workflow run ID` is not specified, use `actions_list` to find the most recent failed run of "FPGA-GPU CI".
-- If a specific run ID is provided (e.g., `42964576058`), fetch its logs directly via `get_job_logs`.
-- Do NOT use the `gh` CLI in bash and do NOT import MCP packages in Python; call the declared MCP tools (`get_job_logs`, `actions_list`, `actions_get`, `create_issue`, `create_pull_request`) directly.
-- After completing triage, you MUST open a GitHub Issue using the `create_issue` safe-output tool detailing the root cause, timing slack, affected files, and recommended remediation. Do not finish with `noop` when a failure has been analyzed.
+### Dispatch & Log Retrieval Instructions
+
+1. If `Workflow run ID` is numeric, that is the target even when it belongs to a
+   workflow other than "FPGA-GPU CI". Do not list runs or replace the supplied ID.
+   Start with `get_job_logs` using `owner`, `repo`, that `run_id`,
+   `failed_only: true`, and `return_content: true`. Use `actions_get` with
+   `method: "get_workflow_run"` and `resource_id` set to the same ID for metadata.
+2. Only when no run ID was supplied, use `actions_list` with
+   `method: "list_workflow_runs"`, `owner`, `repo`, `perPage: 20`, and
+   `workflow_runs_filter: {"status": "completed"}`. GitHub MCP v2.1.0 only
+   accepts execution states in this filter, so filter the returned runs by
+   `conclusion == "failure"` locally; never send `status: "failed"` or
+   `status: "failure"`. Select the most recent failed run named "FPGA-GPU CI" or
+   "ASIC-GPU CI"; paginate until one is found or all pages are exhausted. Exclude
+   this Doctor workflow.
+3. Retrieve metadata and logs through the declared GitHub MCP tools. Do not use
+   `gh` in Bash or import MCP packages in Python. An API/tool error is a blocker,
+   not evidence that no failed run exists.
+
+### Safe-output transport and completion
+
+- GitHub read tools are native MCP tools. Safe-output tools are available through
+  the `safeoutputs` CLI even with `cli-proxy: false`. Begin with the metadata-only
+  command `safeoutputs --help` to confirm the transport.
+- Use `safeoutputs <tool_name> '<JSON object>'` for every issue, comment, PR, or
+  terminal signal. Do not assume a native safe-output tool is exposed. GitHub
+  writes must go through safe outputs; never use `gh` or push a branch directly.
+- After triage, emit exactly one appropriate outcome: a draft PR for a supported
+  fix, an issue for an actionable diagnosis, or a comment on an existing report.
+  Follow the decision and deduplication rules below; an issue is not mandatory
+  when a PR or comment is appropriate.
+- If discovery completed successfully and no eligible failed run exists, finish
+  with `safeoutputs noop '{"message":"No eligible failed CI run was found."}'`.
+  Do the same with an explanatory message for an intentionally cancelled run or
+  a duplicate with no new actionable information. Never use `noop` for a blocker.
+- If the diagnosis cannot be completed (for example, logs are inaccessible),
+  finish with `safeoutputs report_incomplete` and a JSON object containing
+  `reason` and `details`. Do not finish with only a conversational response.
+- The last tool call must record the terminal outcome. A successful final
+  `create_issue`, `add_comment`, or `create_pull_request` call satisfies this;
+  if more reads were necessary afterward, finish with `noop` explaining the
+  completed action and that no additional action is needed.
 
 ## Investigation protocol
 
